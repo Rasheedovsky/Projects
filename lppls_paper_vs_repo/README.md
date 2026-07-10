@@ -384,6 +384,36 @@ date:
 To run it on live data, feed today's price history into `fit_ensembles` and
 re-render; per-refresh cost is ~1.5 s (NM ensemble) or ~50 ms (P-LNN-only).
 
+# Ratings: which algorithm is best?
+
+All evidence combined — 500 synthetic scenarios, 60 real pre-peak windows
+(TASI + SPY), 12 flagged historical episodes (SPY + Nasdaq census) — rated
+by accuracy and time:
+
+| Rank | Algorithm | t_c accuracy (real bubbles) | price_c accuracy | speed/fit | robustness |
+|---|---|---|---|---|---|
+| **1** | **P-LNN-100K** | ★★★ best on all three episodes (+1 d TASI, −3 d SPY, −34 d Nasdaq) | ★★ ±0.6–2% (one divergent outlier) | ★★★ **0.5 ms** | deterministic; rare price_c blow-up needs a sanity clamp |
+| **2** | **M-LNN-KAN** *(extension)* | ★★ best mono method on strong bubbles (−4 d TASI) | ★★★ best in 4/6 SPY episodes (−0.1…−1%) | ★ 2.8 s | deterministic; wider window-to-window spread |
+| **3** | **M-LNN** | ★★ −12…−23 d (early) | ★★ ±1.5–3% | ★★ 0.45 s | best tails on synthetic (p95 16.6 d); no failures |
+| **4** | **LM (paper protocol)** | ★ −16…−22 d (early) | ★★ ±2–2.3% | ★★ 0.4–0.9 s | best synthetic median (tied); no failures |
+| **5** | **lppls-repo (NM)** | ★ medians ok, IQR spans months | ★ −1…−7% | ★★★ 13–81 ms | unseeded RNG, 2–3 fails/30; strong **as an ensemble detector** |
+
+**Opinion.** For a live indicator, **P-LNN-100K is the best algorithm**: it
+is the only method whose median critical time landed essentially on the
+realised peak of every real bubble tested, at four orders of magnitude less
+compute than any per-series calibration — retraining it (~3 min on CPU) is a
+non-issue. Its two weaknesses are the fixed 252-point input and the rare
+inconsistent (t_c, m, ω) triple whose price extrapolation diverges — both
+manageable (resampling + a price_c sanity clamp). **M-LNN-KAN is the
+accuracy pick** when you need the single best calibration of a strongly
+bubbling series and can afford ~3 s. **M-LNN** is the balanced default,
+**LM** is the honest classical baseline, and the repo's **NM** should be
+used the way its authors use it — as a cheap, qualified *ensemble* (its
+census detected all eight SPY events) — never as a single-fit estimator.
+The per-method detection sweep (`scripts/method_detection_sweep.py`,
+`results/fig_method_sweep_spy.png`) tests each algorithm's independent
+multi-bubble detection over SPY 1998–2010.
+
 # Conclusions
 
 **On TASI, the paper's approach wins the forecasting task.** Standing 2–7
