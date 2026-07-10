@@ -28,7 +28,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from deep_lppls import lm, mlnn, plnn, synthetic
+from deep_lppls import kan, lm, mlnn, plnn, synthetic
 from deep_lppls.core import f1_loss
 from lppls.lppls import LPPLS
 
@@ -135,10 +135,53 @@ COLORS = {
     "LM": "tab:blue",
     "lppls-repo (NM)": "tab:red",
     "M-LNN": "tab:orange",
+    "M-LNN-KAN": "tab:cyan",
     "P-LNN-100K": "tab:purple",
     "P-LNN-100K-AR1": "tab:green",
     "P-LNN-100K-BOTH": "tab:brown",
 }
+
+
+def run_kan_merge(n_scen, mlnn_epochs):
+    """Run only M-LNN-KAN on the same reproducible scenarios and merge into
+    the stored estimates/timing files, regenerating figures and summaries."""
+    est_path = ROOT / "results" / "synthetic_estimates.csv"
+    old = pd.read_csv(est_path, parse_dates=False)
+    old = old[old.method != "M-LNN-KAN"]
+    t = np.linspace(0.0, 1.0, synthetic.N_POINTS)
+    new_rows, timing_rows = [], []
+    for noise in ["white", "ar1"]:
+        X, y_true = make_scenarios(n_scen, noise, seed=100 if noise == "white" else 200)
+        kan.fit_mlnn_kan(X[0], epochs=2, seed=0)  # warm-up (JIT)
+        times = []
+        for i in range(n_scen):
+            t0 = time.perf_counter()
+            r = kan.fit_mlnn_kan(X[i], epochs=mlnn_epochs, seed=i)
+            times.append(time.perf_counter() - t0)
+            new_rows.append(dict(
+                scen=i, noise=noise, method="M-LNN-KAN", tc=r["tc"], m=r["m"], w=r["w"],
+                tc_true=y_true[i, 0], m_true=y_true[i, 1], w_true=y_true[i, 2],
+                fit_mse=f1_loss(t, X[i], r["tc"], r["m"], r["w"]),
+            ))
+        timing_rows.append(dict(noise=noise, method="M-LNN-KAN", mean_s=np.mean(times), std_s=np.std(times), n=len(times)))
+        print(f"  {noise}: M-LNN-KAN done ({np.mean(times):.3f}s avg)", flush=True)
+
+    df = pd.concat([old, pd.DataFrame(new_rows)], ignore_index=True)
+    df.to_csv(est_path, index=False)
+    for noise in ["white", "ar1"]:
+        plot_cdfs(df[df.noise == noise], noise, ROOT / "results" / f"fig_synth_cdf_{noise}.png")
+
+    tdf = pd.read_csv(ROOT / "results" / "timing_synthetic.csv")
+    tdf = pd.concat([tdf[tdf.method != "M-LNN-KAN"], pd.DataFrame(timing_rows)], ignore_index=True)
+    tdf.to_csv(ROOT / "results" / "timing_synthetic.csv", index=False)
+    print(tdf.to_string(index=False))
+
+    df["tc_err_days"] = np.abs(df.tc - df.tc_true) / DAY
+    df["m_err"] = np.abs(df.m - df.m_true)
+    df["w_err"] = np.abs(df.w - df.w_true)
+    summary = df.groupby(["noise", "method"])[["tc_err_days", "m_err", "w_err", "fit_mse"]].median().round(4)
+    summary.to_csv(ROOT / "results" / "synthetic_error_summary.csv")
+    print(summary.to_string())
 
 
 def plot_cdfs(df, noise, out):
@@ -173,7 +216,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=250)
     ap.add_argument("--mlnn-epochs", type=int, default=mlnn.EPOCHS)
+    ap.add_argument("--kan-merge", action="store_true",
+                    help="run only M-LNN-KAN and merge into stored results")
     args = ap.parse_args()
+
+    if args.kan_merge:
+        run_kan_merge(args.n, args.mlnn_epochs)
+        return
 
     plnn_models = {}
     for name in ["P-LNN-100K", "P-LNN-100K-AR1", "P-LNN-100K-BOTH"]:

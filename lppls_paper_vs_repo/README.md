@@ -17,14 +17,20 @@ deep_lppls/          paper implementation
   synthetic.py       synthetic LPPLS series w/ white & AR(1) noise (Table 1)
   lm.py              paper benchmark: multistart Levenberg–Marquardt (App. A.1)
   mlnn.py            Mono-LPPLS-NN — per-series PINN-style network (Sec. 2.1)
+  kan.py             M-LNN-KAN — M-LNN with Kolmogorov-Arnold layers [extension]
   plnn.py            Poly-LPPLS-NN — supervised network, input 252 (Sec. 2.2)
 scripts/
   train_plnn.py            trains P-LNN-100K / -AR1 / -BOTH (100k series each)
   benchmark_synthetic.py   250-scenario error CDFs + timing (Fig. 3 / Table 2 analogue)
-  compare_tasi.py          TASI bubble: fits + t_c PDFs + timing (Fig. 4 protocol)
+                           (--kan-merge adds the M-LNN-KAN to stored results)
+  compare_empirical.py     bubble episode comparison: fits + t_c PDFs + timing
+                           (--data tasi | spy; paper Fig. 4 protocol)
   tasi_confidence_repo.py  Boulder package confidence indicator on TASI (bonus)
 data/
   TASI_daily_2020_2024.csv daily TASI closes (validated against public records)
+  SPY_daily_1998_2021.csv  daily SPY closes (QuantConnect Lean sample data,
+                           validated: COVID peak 338.34 on 2020-02-19,
+                           trough 222.95 on 2020-03-23)
 models/                    trained P-LNN weights
 results/                   figures + CSV tables
 ```
@@ -189,6 +195,21 @@ paper's Figs. 8–10. Wall-clock: **~200 s per variant on a 4-core CPU** with th
 JAX `lax.scan` training loop (the paper reports ~1.5 h per variant on a V100).
 
 ---
+
+# Extension: M-LNN-KAN (Kolmogorov-Arnold Network)
+
+`deep_lppls/kan.py` replaces the M-LNN's ReLU MLP with **KAN layers**
+(Liu et al. 2024, arXiv:2404.19756): every edge carries a learnable cubic
+B-spline activation (8-interval grid on [−1, 1], 11 basis functions, tanh
+grid-bounding) plus a SiLU base branch. Everything else — the PINN-style
+loss through the analytic linear solve, the parameter-bound penalty,
+Adam(1e-2), 1500 epochs, best-state selection — is byte-for-byte the same
+protocol as `mlnn.py`, so differences are attributable to the network
+parameterisation alone. Widths follow KAN convention (narrower): [32, 32]
+vs the MLP's [128, 128]; the KAN still has ~2.3× more parameters per layer
+because each edge carries 12 coefficients.
+
+<!-- KAN-RESULTS -->
 
 # Conclusions
 

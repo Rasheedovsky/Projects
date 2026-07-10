@@ -1,6 +1,8 @@
-"""TASI bubble comparison, replicating the empirical protocol of the paper
-(Sec. 3.2, Figs. 4-5) on the Tadawul All Share Index 2021-2022 bubble
-(peak 2022-05-08, close 13,820.35).
+"""Empirical bubble comparison, replicating the protocol of the paper
+(Sec. 3.2, Figs. 4-5) on real bubble episodes:
+
+  --data tasi   Tadawul All Share Index 2021-22 bubble (peak 2022-05-08)
+  --data spy    SPY COVID melt-up (peak 2020-02-19, crash into 2020-03-23)
 
 For a set of calibration windows [t1, t2] that all end strictly before the
 realised peak (both endpoints shift, as in the paper), each window is
@@ -10,13 +12,15 @@ log-price is min-max scaled, and (tc, m, w) is estimated with:
 
   LM (paper appendix A.1)     multistart Levenberg-Marquardt
   lppls-repo (NM)             Boulder-Investment-Technologies/lppls, fit(25)
-  M-LNN                       fresh 2-hidden-layer network per window
+  M-LNN                       fresh 2-hidden-layer ReLU network per window
+  M-LNN-KAN                   same protocol, KAN (B-spline) layers [extension]
   P-LNN-100K / -AR1 / -BOTH   pre-trained supervised networks
 
-Outputs: results/fig_tasi_fits.png (Fig. 4 analogue), results/tasi_estimates.csv,
-results/timing_tasi.csv, results/tasi_summary.csv.
+Outputs per dataset key: results/fig_<key>_fits.png (Fig. 4 analogue),
+results/<key>_estimates.csv, results/timing_<key>.csv, results/<key>_summary.csv.
 """
 
+import argparse
 import sys
 import time
 from pathlib import Path
@@ -33,7 +37,7 @@ from scipy.stats import gaussian_kde
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from deep_lppls import lm, mlnn, plnn
+from deep_lppls import kan, lm, mlnn, plnn
 from deep_lppls.core import design_matrix, minmax_scale, solve_linear
 from lppls.lppls import LPPLS
 
@@ -42,12 +46,32 @@ T2_OFFSETS = [5, 10, 15, 20, 25, 30]        # trading days before the peak
 WINDOW_LENGTHS = [150, 200, 252, 300, 350]  # trading days
 PLNN_NAMES = ["P-LNN-100K", "P-LNN-100K-AR1", "P-LNN-100K-BOTH"]
 
+DATASETS = {
+    # peak dates pinned to the realised bubble peak of each episode (for SPY
+    # the global max sits at the data edge, so argmax would pick the wrong one)
+    "tasi": dict(csv="TASI_daily_2020_2024.csv", peak="2022-05-08", label="TASI 2021-22 bubble"),
+    "spy": dict(csv="SPY_daily_1998_2021.csv", peak="2020-02-19", label="SPY COVID melt-up"),
+}
 
-def load_tasi():
-    df = pd.read_csv(ROOT / "data" / "TASI_daily_2020_2024.csv", parse_dates=["Date"])
+COLORS = {
+    "LM": "tab:blue",
+    "lppls-repo (NM)": "tab:red",
+    "M-LNN": "tab:orange",
+    "M-LNN-KAN": "tab:cyan",
+    "P-LNN-100K": "tab:purple",
+    "P-LNN-100K-AR1": "tab:green",
+    "P-LNN-100K-BOTH": "tab:brown",
+}
+PLOT_METHODS = ["LM", "lppls-repo (NM)", "M-LNN", "M-LNN-KAN", "P-LNN-100K"]
+
+
+def load_data(key):
+    cfg = DATASETS[key]
+    df = pd.read_csv(ROOT / "data" / cfg["csv"], parse_dates=["Date"])
     df = df.sort_values("Date").reset_index(drop=True)
     df["logp"] = np.log(df["Close"])
-    return df
+    peak_idx = int(df.index[df.Date == cfg["peak"]][0])
+    return df, peak_idx, cfg["label"]
 
 
 def resample_window(logp_window):
@@ -79,6 +103,10 @@ def fit_all_methods(x_scaled, plnn_models, seed):
     r = mlnn.fit_mlnn(x_scaled, seed=seed)
     out["M-LNN"] = (dict(tc=r["tc"], m=r["m"], w=r["w"]), time.perf_counter() - t0)
 
+    t0 = time.perf_counter()
+    r = kan.fit_mlnn_kan(x_scaled, seed=seed)
+    out["M-LNN-KAN"] = (dict(tc=r["tc"], m=r["m"], w=r["w"]), time.perf_counter() - t0)
+
     for name, params in plnn_models.items():
         t0 = time.perf_counter()
         p = plnn.predict(params, x_scaled.astype(np.float32))[0]
@@ -87,13 +115,17 @@ def fit_all_methods(x_scaled, plnn_models, seed):
 
 
 def main():
-    df = load_tasi()
-    peak_idx = int(df["Close"].idxmax())
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--data", choices=list(DATASETS), default="tasi")
+    args = ap.parse_args()
+    key = args.data
+
+    df, peak_idx, label = load_data(key)
     peak_date = df.loc[peak_idx, "Date"]
     after = df.iloc[peak_idx : peak_idx + 130]  # ~6 months
     trough_idx = int(after["Close"].idxmin())
     trough_date = df.loc[trough_idx, "Date"]
-    print(f"peak {peak_date.date()} close={df.loc[peak_idx, 'Close']:.2f} | "
+    print(f"[{key}] peak {peak_date.date()} close={df.loc[peak_idx, 'Close']:.2f} | "
           f"drawdown trough {trough_date.date()} close={df.loc[trough_idx, 'Close']:.2f}", flush=True)
 
     plnn_models = {n: plnn.load_params(ROOT / "models" / f"{n}.npz") for n in PLNN_NAMES
@@ -132,10 +164,10 @@ def main():
         print(f"  windows ending {t2_off}d before peak done", flush=True)
 
     est = pd.DataFrame(rows)
-    est.to_csv(ROOT / "results" / "tasi_estimates.csv", index=False)
+    est.to_csv(ROOT / "results" / f"{key}_estimates.csv", index=False)
 
     tdf = pd.DataFrame([dict(method=m, mean_s=np.mean(v), std_s=np.std(v), n=len(v)) for m, v in timing.items()])
-    tdf.to_csv(ROOT / "results" / "timing_tasi.csv", index=False)
+    tdf.to_csv(ROOT / "results" / f"timing_{key}.csv", index=False)
     print(tdf.to_string(index=False), flush=True)
 
     # summary: median predicted tc (days relative to realised peak) per method
@@ -146,22 +178,11 @@ def main():
         median_m=("m", "median"), median_w=("w", "median"),
         n_valid=("tc_days_vs_peak", lambda s: s.notna().sum()),
     ).round(2)
-    summ.to_csv(ROOT / "results" / "tasi_summary.csv")
+    summ.to_csv(ROOT / "results" / f"{key}_summary.csv")
     print(summ.to_string(), flush=True)
 
-    plot(df, est, peak_idx, trough_idx, plnn_models)
+    plot(df, est, peak_idx, trough_idx, key, label)
     print("figure saved", flush=True)
-
-
-COLORS = {
-    "LM": "tab:blue",
-    "lppls-repo (NM)": "tab:red",
-    "M-LNN": "tab:orange",
-    "P-LNN-100K": "tab:purple",
-    "P-LNN-100K-AR1": "tab:green",
-    "P-LNN-100K-BOTH": "tab:brown",
-}
-PLOT_METHODS = ["LM", "lppls-repo (NM)", "M-LNN", "P-LNN-100K"]
 
 
 def idx_to_date(df, fidx):
@@ -173,16 +194,16 @@ def idx_to_date(df, fidx):
     return df.loc[lo, "Date"] + (df.loc[hi, "Date"] - df.loc[lo, "Date"]) * frac
 
 
-def plot(df, est, peak_idx, trough_idx, plnn_models):
+def plot(df, est, peak_idx, trough_idx, key, label):
     """Paper Fig. 4 analogue: tc PDFs strip on top, log-price + fits below."""
     fig, (ax_pdf, ax) = plt.subplots(
         2, 1, figsize=(14, 8.5), sharex=True,
         gridspec_kw={"height_ratios": [1, 3.2], "hspace": 0.04},
     )
-    lo_idx = peak_idx - 420
+    lo_idx = max(peak_idx - 420, 0)
     hi_idx = min(peak_idx + 160, len(df) - 1)
     seg = df.iloc[lo_idx:hi_idx]
-    ax.plot(seg["Date"], seg["logp"], color="black", lw=1.0, label="TASI ln(price)")
+    ax.plot(seg["Date"], seg["logp"], color="black", lw=1.0, label=f"{key.upper()} ln(price)")
 
     # representative window: t2 = 20 trading days before peak, L = 252
     t2_off, L = 20, 252
@@ -200,7 +221,6 @@ def plot(df, est, peak_idx, trough_idx, plnn_models):
 
     # fits of the representative window, extended past t2 towards tc
     rep = est[(est.t2_off == t2_off) & (est.L == L) & est.method.isin(PLOT_METHODS)]
-    t_grid = np.linspace(0.0, 1.0, 600)
     for _, r in rep.iterrows():
         if not np.isfinite(r["tc_norm"]):
             continue
@@ -228,8 +248,8 @@ def plot(df, est, peak_idx, trough_idx, plnn_models):
             continue
         kde = gaussian_kde(d_num)
         pdf = kde(x_num)
-        label = f"{method} ({len(vals)}/{n_total} in range)"
-        ax_pdf.plot(x_dates, pdf, color=COLORS[method], lw=1.6, label=label)
+        label_m = f"{method} ({len(vals)}/{n_total} in range)"
+        ax_pdf.plot(x_dates, pdf, color=COLORS[method], lw=1.6, label=label_m)
         ax_pdf.fill_between(x_dates, 0, pdf, color=COLORS[method], alpha=0.25)
     ax_pdf.axvspan(df.loc[peak_idx, "Date"], df.loc[trough_idx, "Date"], color="red", alpha=0.12)
     ax_pdf.axvline(df.loc[peak_idx, "Date"], color="black", ls="-.", lw=1.2)
@@ -238,14 +258,14 @@ def plot(df, est, peak_idx, trough_idx, plnn_models):
     ax_pdf.set_ylabel("PDF of $t_c$")
     ax_pdf.set_yticks([])
     ax_pdf.legend(fontsize=8, loc="upper left")
-    ax_pdf.set_title("TASI 2021-22 bubble: LPPLS fits and PDFs of predicted $t_c$ across "
+    ax_pdf.set_title(f"{label}: LPPLS fits and PDFs of predicted $t_c$ across "
                      f"{est.groupby('method').size().max()} calibration windows (paper Fig. 4 protocol)")
 
-    ax.set_ylabel("ln(TASI close)")
+    ax.set_ylabel(f"ln({key.upper()} close)")
     ax.legend(loc="upper left", fontsize=9, ncols=2)
     ax.grid(alpha=0.25)
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
-    fig.savefig(ROOT / "results" / "fig_tasi_fits.png", dpi=140, bbox_inches="tight")
+    fig.savefig(ROOT / "results" / f"fig_{key}_fits.png", dpi=140, bbox_inches="tight")
 
 
 if __name__ == "__main__":
