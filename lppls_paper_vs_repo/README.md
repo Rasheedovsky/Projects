@@ -29,6 +29,9 @@ scripts/
                            (--data tasi | spy; paper Fig. 4 protocol)
   spy_bubble_scan.py       rolling bubble census w/ critical prices
                            (--data spy | nasdaq; episode detection + price_c)
+  live_lppls_indicator.py  live dashboard: t_c and price_c probability
+                           densities at any date (--date) or animated (--animate)
+  plot_episode_methods.py  per-episode method predictions vs realised peaks
   tasi_confidence_repo.py  Boulder package confidence indicator on TASI (bonus)
 data/
   TASI_daily_2020_2024.csv daily TASI closes (validated against public records)
@@ -351,6 +354,35 @@ scannable; the March-2009 bottom peaks at 0.25 negative confidence (just
 under threshold); the 2010-12 flag and the Nasdaq 2000-03 "outcome" are
 truncated by their data ends. Scan cost: ~6,900 Nelder-Mead ensemble fits
 in ~8 minutes of wall-clock on 1 CPU core.
+
+# Live indicator: probability densities over time and price
+
+`scripts/live_lppls_indicator.py` turns the whole apparatus into a
+deployable, real-time indicator. Standing at any date t₂ — using only data
+up to t₂ — it fits an ensemble of 24 window lengths (60…405 trading days),
+keeps the fits passing the repo's qualification filters, and renders the
+joint prediction as **probability densities**: the PDF of the critical time
+t_c on the time axis (top strip) and the PDF of the critical price
+p_c = exp(A) on the price axis (right strip), plus the ensemble confidence.
+Two ensembles are drawn: the reference repo's Nelder-Mead (red, ~1.5 s per
+refresh) and the paper's P-LNN-100K (purple, ~50 ms per refresh — fast
+enough for tick-level updating).
+
+Snapshot standing one month before the TASI peak (2022-04-07; realised peak
+2022-05-08 @ 13,820 — the P-LNN density puts t_c in early May and price_c
+at ≈13,900):
+
+![TASI live snapshot](results/fig_live_indicator_tasi_2022-04-08.png)
+
+Animated versions (weekly steps through the TASI bubble; ~2-weekly into the
+SPY 2007 top) — each frame is computed strictly from data available on that
+date:
+
+![TASI live indicator](results/live_indicator_tasi.gif)
+![SPY live indicator](results/live_indicator_spy.gif)
+
+To run it on live data, feed today's price history into `fit_ensembles` and
+re-render; per-refresh cost is ~1.5 s (NM ensemble) or ~50 ms (P-LNN-only).
 
 # Conclusions
 
