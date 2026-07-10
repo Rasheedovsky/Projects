@@ -1,10 +1,12 @@
-# Deep LPPLS (arXiv:2405.12803) vs Boulder-Investment-Technologies/lppls — tested on TASI
+# Deep LPPLS (arXiv:2405.12803) vs Boulder-Investment-Technologies/lppls — tested on TASI & SPY
 
 End-to-end implementation of the calibration methods in **"Deep LPPLS: Forecasting of
 temporal critical points in natural, engineering and financial systems"**
 (J. Nielsen, D. Sornette, M. Raissi, arXiv:2405.12803), compared against the reference
 implementation in [Boulder-Investment-Technologies/lppls](https://github.com/Boulder-Investment-Technologies/lppls),
-with both evaluated on the **Tadawul All Share Index (TASI)** 2021–22 bubble.
+with both evaluated on real data: the **Tadawul All Share Index (TASI)** 2021–22 bubble
+and the **SPY** COVID melt-up, plus an **M-LNN-KAN** extension (Kolmogorov-Arnold
+layers replacing the ReLU MLP).
 
 _Results, figures and the full comparison write-up are generated into `results/` by the
 scripts below; the summary of findings is at the bottom of this file._
@@ -95,11 +97,16 @@ predicts 2–7 weeks ahead, never seeing data at or beyond the peak.
 | Method | median t_c | vs realised peak | IQR (days vs peak) | valid fits |
 |---|---|---|---|---|
 | **P-LNN-100K** | **2022-05-09** | **+1 day** | −8.2 … +6.7 | 30/30 |
+| M-LNN-KAN *(extension)* | 2022-05-03 | −4 days (early) | −20.8 … +21.8 | 30/30 |
 | P-LNN-100K-AR1 | 2022-05-15 | +5 days | −3.9 … +13.2 | 30/30 |
-| P-LNN-100K-BOTH | 2022-05-18 | +8 days | −3.9 … +24.8 | 30/30 |
+| P-LNN-100K-BOTH | 2022-05-19 | +8 days | −3.9 … +24.8 | 30/30 |
 | M-LNN | 2022-04-13 | −12 days (early) | −21.7 … −4.5 | 30/30 |
 | LM (paper App. A.1) | 2022-04-07 | −16 days (early) | −25.1 … −11.5 | 30/30 |
-| lppls-repo (Nelder-Mead) | 2022-08-22 | +72 days (late) | +18.0 … +345 | 27/30 |
+| lppls-repo (Nelder-Mead) | 2022-07-14 | +46 days (late) | +1.8 … +152 | 28/30 |
+
+(The Nelder-Mead row moves between reruns — the repo's `fit` seeds its random
+restarts from the global RNG — which is itself part of the finding; all other
+methods are seed-deterministic here.)
 
 This reproduces the paper's Fig. 4/5 finding on completely new data: the
 **P-LNN's t_c PDF concentrates almost exactly on the realised peak**, the M-LNN
@@ -114,11 +121,12 @@ inter-quartile spread of nearly a year and 3 of 30 windows failing outright.
 | Method | mean | std |
 |---|---|---|
 | P-LNN-100K-BOTH | **0.43 ms** | 0.04 ms |
-| P-LNN-100K-AR1 | 0.53 ms | 0.06 ms |
-| P-LNN-100K | 0.74 ms | 0.06 ms |
-| lppls-repo (NM) | 60 ms | 101 ms |
-| M-LNN | 0.48 s | 0.04 s |
-| LM | 0.89 s | 0.64 s |
+| P-LNN-100K-AR1 | 0.49 ms | 0.04 ms |
+| P-LNN-100K | 0.67 ms | 0.04 ms |
+| lppls-repo (NM) | 54 ms | 85 ms |
+| M-LNN | 0.45 s | 0.03 s |
+| LM | 0.82 s | 0.60 s |
+| M-LNN-KAN *(extension)* | 2.75 s | 0.07 s |
 
 The paper's headline speed claim holds: **P-LNN inference is 2–3 orders of
 magnitude faster than any iterative calibration** (here ~0.5 ms vs the paper's
@@ -126,6 +134,39 @@ magnitude faster than any iterative calibration** (here ~0.5 ms vs the paper's
 numba-JIT'd Nelder-Mead (60 ms) is ~60× faster than the paper's reported 3.58 s
 LM average, so the gap between "state of the art" and P-LNN is smaller than
 Table 2 of the paper suggests when the classical code is well optimised.
+
+## 1b. SPY COVID melt-up (peak 2020-02-19)
+
+![SPY fits](results/fig_spy_fits.png)
+
+Realised episode: peak close **338.34 on 2020-02-19**, crash trough **222.95 on
+2020-03-23 (−34%)**. Same protocol: 30 windows ending 5–30 trading days before
+the peak (2020-01-06 … 2020-02-12), no method sees the peak.
+
+**Median predicted t_c across the 30 windows:**
+
+| Method | median t_c | vs realised peak | IQR (days vs peak) | valid fits |
+|---|---|---|---|---|
+| **P-LNN-100K-AR1** | **2020-02-19** | **+1 day** | −9.0 … +12.1 | 30/30 |
+| P-LNN-100K-BOTH | 2020-02-14 | −3 days | −7.8 … +10.2 | 30/30 |
+| P-LNN-100K | 2020-02-14 | −3 days | −22.7 … +2.2 | 30/30 |
+| lppls-repo (Nelder-Mead) | 2020-02-27 | +6 days | −12.5 … +148 | 29/30 |
+| LM (paper App. A.1) | 2020-01-16 | −22 days (early) | −28.9 … −20.3 | 30/30 |
+| M-LNN | 2020-01-15 | −23 days (early) | −28.3 … −4.9 | 30/30 |
+| M-LNN-KAN *(extension)* | 2020-01-10 | −26 days (early) | −36.4 … −18.8 | 30/30 |
+
+The picture repeats with one twist: the P-LNN family again nails the realised
+peak (its t_c PDF sits on the red band), the per-series methods (LM and both
+M-LNN variants) all lock onto the sharp mid-January acceleration and call the
+critical point ~3–5 weeks early, and the repo's Nelder-Mead is right at the
+median but with an IQR spanning five months. The SPY melt-up's weaker
+log-periodic structure hurts all single-window calibrations; the supervised
+P-LNN, trained across 100k noise realisations, is the only class that stays
+anchored — mirroring the paper's Fig. 5 result where the P-LNN/M-LNN beat the
+classical search on the 2011 silver bubble.
+
+Per-fit timings on SPY match TASI within noise (LM 0.87 s, NM 81 ms, M-LNN
+0.46 s, M-LNN-KAN 2.77 s, P-LNN 0.4–0.7 ms) — see `results/timing_spy.csv`.
 
 ## 2. Reference repo's own product: confidence indicator on TASI
 
@@ -209,7 +250,38 @@ parameterisation alone. Widths follow KAN convention (narrower): [32, 32]
 vs the MLP's [128, 128]; the KAN still has ~2.3× more parameters per layer
 because each edge carries 12 coefficients.
 
-<!-- KAN-RESULTS -->
+## KAN vs ReLU, on real data (30 calibration windows per episode)
+
+| | median t_c vs peak | IQR (days) | mean s/fit |
+|---|---|---|---|
+| **TASI** — M-LNN (ReLU) | −12.2 d | −21.7 … −4.5 | 0.45 s |
+| **TASI** — M-LNN-KAN | **−3.9 d** | −20.8 … +21.8 | 2.75 s |
+| **SPY** — M-LNN (ReLU) | −22.7 d | −28.3 … −4.9 | 0.46 s |
+| **SPY** — M-LNN-KAN | −25.8 d | −36.4 … −18.8 | 2.77 s |
+
+Reading:
+
+* **Accuracy — mixed, dataset-dependent.** On TASI the KAN's median t_c is 3×
+  closer to the realised peak than the ReLU M-LNN (−3.9 vs −12.2 days), at the
+  cost of a wider spread — its learnable spline activations let individual
+  windows escape the "call t_c right after t2" attractor the ReLU net falls
+  into, but the same flexibility produces more window-to-window variance. On
+  SPY, where the log-periodic signal is weaker, that flexibility buys nothing:
+  the KAN is slightly earlier/worse than the ReLU version (−25.8 vs −22.7 days)
+  and both sit ~1 month early. In head-to-head window counts the two variants
+  split roughly evenly on both datasets.
+* **Time — the KAN costs ~6×.** ~2.75 s vs ~0.46 s per fit (1500 epochs each,
+  same optimizer/loss): every edge evaluates an 11-function cubic B-spline
+  basis plus a SiLU branch, and the per-step XLA graph is correspondingly
+  deeper (~1.8 ms vs ~0.3 ms per epoch). With narrower layers (32 vs 128) the
+  KAN still carries ~110k parameters vs the MLP's ~49k.
+* **Verdict.** KAN is a viable drop-in for the M-LNN and can extract a
+  materially better median t_c when genuine log-periodic structure is present
+  (TASI), but it is not a free win: 6× slower, higher variance, and no
+  advantage on the weaker-signal episode (SPY). If per-fit latency matters,
+  the ReLU M-LNN remains the better accuracy-per-second trade; if forecast
+  quality on strongly bubbly series is the only criterion, the KAN variant is
+  worth the extra compute.
 
 # Conclusions
 
@@ -223,6 +295,17 @@ occasionally fail to converge — exactly the "sloppy t_c" pathology the paper
 sets out to fix. The repo's ensemble confidence indicator, however, remains a
 strong (and very cheap) bubble *detector* on TASI even though its individual
 t_c estimates are noisy.
+
+**SPY confirms the pattern.** On the COVID melt-up the P-LNN family again
+centres its t_c PDF on the realised peak (median within ±3 days) while every
+per-window calibration — LM, M-LNN, M-LNN-KAN — locks onto the January
+acceleration and calls the top ~3–5 weeks early, and the repo's Nelder-Mead
+scatters over five months.
+
+**KAN extension.** Swapping the M-LNN's ReLU MLP for KAN layers (same loss,
+optimizer, epochs) is accuracy-accretive where the log-periodic signal is
+strong — on TASI it moves the median t_c from 12 days early to 4 days early —
+but costs ~6× the fit time, adds variance, and does not help on SPY.
 
 **Speed.** P-LNN inference costs ~0.25 ms per calibration on plain CPU —
 about 4 orders of magnitude faster than multistart LM and ~60× faster than
