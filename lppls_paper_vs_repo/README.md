@@ -94,19 +94,24 @@ predicts 2–7 weeks ahead, never seeing data at or beyond the peak.
 
 **Median predicted t_c across the 30 windows:**
 
-| Method | median t_c | vs realised peak | IQR (days vs peak) | valid fits |
-|---|---|---|---|---|
-| **P-LNN-100K** | **2022-05-09** | **+1 day** | −8.2 … +6.7 | 30/30 |
-| M-LNN-KAN *(extension)* | 2022-05-03 | −4 days (early) | −20.8 … +21.8 | 30/30 |
-| P-LNN-100K-AR1 | 2022-05-15 | +5 days | −3.9 … +13.2 | 30/30 |
-| P-LNN-100K-BOTH | 2022-05-19 | +8 days | −3.9 … +24.8 | 30/30 |
-| M-LNN | 2022-04-13 | −12 days (early) | −21.7 … −4.5 | 30/30 |
-| LM (paper App. A.1) | 2022-04-07 | −16 days (early) | −25.1 … −11.5 | 30/30 |
-| lppls-repo (Nelder-Mead) | 2022-07-14 | +46 days (late) | +1.8 … +152 | 28/30 |
+| Method | median t_c | vs realised peak | IQR (days vs peak) | median price_c (vs peak 13,820) | valid fits |
+|---|---|---|---|---|---|
+| **P-LNN-100K** | **2022-05-09** | **+1 day** | −8.2 … +6.7 | **13,903 (+0.6%)** | 30/30 |
+| M-LNN-KAN *(extension)* | 2022-05-03 | −4 days (early) | −20.8 … +21.8 | 14,118 (+2.2%) | 30/30 |
+| P-LNN-100K-AR1 | 2022-05-15 | +5 days | −3.9 … +13.2 | 14,177 (+2.6%) | 30/30 |
+| P-LNN-100K-BOTH | 2022-05-19 | +8 days | −3.9 … +24.8 | 13,934 (+0.8%) | 30/30 |
+| M-LNN | 2022-04-13 | −12 days (early) | −21.7 … −4.5 | 13,408 (−3.0%) | 30/30 |
+| LM (paper App. A.1) | 2022-04-07 | −16 days (early) | −25.1 … −11.5 | 13,502 (−2.3%) | 30/30 |
+| lppls-repo (Nelder-Mead) | 2022-07-14 | +46 days (late) | +1.8 … +152 | 12,902 (−6.7%) | 28/30 |
 
-(The Nelder-Mead row moves between reruns — the repo's `fit` seeds its random
-restarts from the global RNG — which is itself part of the finding; all other
-methods are seed-deterministic here.)
+price_c is the LPPLS **critical price** exp(A) — the model's price level at
+t_c, since O(t_c) = A in Eq. 1 — computed per window and mapped back through
+the log-price scaling. Note how much better conditioned it is than t_c: every
+method's median critical price lands within ~3% of the realised peak (7%
+for NM), even when its t_c is weeks off. (The Nelder-Mead row moves between
+reruns — the repo's `fit` seeds its random restarts from the global RNG —
+which is itself part of the finding; all other methods are seed-deterministic
+here.)
 
 This reproduces the paper's Fig. 4/5 finding on completely new data: the
 **P-LNN's t_c PDF concentrates almost exactly on the realised peak**, the M-LNN
@@ -145,15 +150,21 @@ the peak (2020-01-06 … 2020-02-12), no method sees the peak.
 
 **Median predicted t_c across the 30 windows:**
 
-| Method | median t_c | vs realised peak | IQR (days vs peak) | valid fits |
-|---|---|---|---|---|
-| **P-LNN-100K-AR1** | **2020-02-19** | **+1 day** | −9.0 … +12.1 | 30/30 |
-| P-LNN-100K-BOTH | 2020-02-14 | −3 days | −7.8 … +10.2 | 30/30 |
-| P-LNN-100K | 2020-02-14 | −3 days | −22.7 … +2.2 | 30/30 |
-| lppls-repo (Nelder-Mead) | 2020-02-27 | +6 days | −12.5 … +148 | 29/30 |
-| LM (paper App. A.1) | 2020-01-16 | −22 days (early) | −28.9 … −20.3 | 30/30 |
-| M-LNN | 2020-01-15 | −23 days (early) | −28.3 … −4.9 | 30/30 |
-| M-LNN-KAN *(extension)* | 2020-01-10 | −26 days (early) | −36.4 … −18.8 | 30/30 |
+| Method | median t_c | vs realised peak | IQR (days vs peak) | median price_c (vs peak 338.34) | valid fits |
+|---|---|---|---|---|---|
+| **P-LNN-100K-AR1** | **2020-02-19** | **+1 day** | −9.0 … +12.1 | 340.39 (+0.6%) | 30/30 |
+| P-LNN-100K-BOTH | 2020-02-14 | −3 days | −7.8 … +10.2 | 334.79 (−1.1%) | 30/30 |
+| P-LNN-100K | 2020-02-14 | −3 days | −22.7 … +2.2 | 331.70 (−2.0%) | 30/30 |
+| lppls-repo (Nelder-Mead) | 2020-02-27 | +6 days | −12.5 … +148 | 334.69 (−1.1%) | 29/30 |
+| LM (paper App. A.1) | 2020-01-16 | −22 days (early) | −28.9 … −20.3 | 330.99 (−2.2%) | 30/30 |
+| M-LNN | 2020-01-15 | −23 days (early) | −28.3 … −4.9 | 333.33 (−1.5%) | 30/30 |
+| M-LNN-KAN *(extension)* | 2020-01-10 | −26 days (early) | −36.4 … −18.8 | 331.60 (−2.0%) | 30/30 |
+
+The critical-price story repeats and is even cleaner than on TASI: **all seven
+methods put the median critical price within 2.2% of the realised 338.34
+peak** — including the ones whose t_c is a month early. On SPY the t_c reruns
+above also confirm the earlier findings within run-to-run noise (only the
+unseeded Nelder-Mead moves materially between runs).
 
 The picture repeats with one twist: the P-LNN family again nails the realised
 peak (its t_c PDF sits on the red band), the per-series methods (LM and both

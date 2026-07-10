@@ -48,17 +48,29 @@ from deep_lppls.core import minmax_scale, solve_linear
 from lppls.lppls import LPPLS
 
 T2_STEP = 5
-WINDOWS = [60, 90, 126, 189, 252, 378]
+WINDOWS = [40, 60, 80, 100, 126, 152, 189, 226, 252, 300, 350]
 CONF_THR = 0.30
 MIN_RUN = 2         # scan points above threshold to open an episode
 MERGE_GAP = 6       # scan points (= 30 trading days) allowed inside an episode
 N = 252             # resampled length for the paper-method fits
 
+DATASETS = {
+    "spy": dict(csv="SPY_daily_1998_2021.csv", end="2010-12-31", label="SPY 1998-2010"),
+    # validation anchor: the Boulder repo's own bundled Nasdaq dot-com series
+    "nasdaq": dict(csv=None, end="2002-12-31", label="Nasdaq 1994-2002 (repo sample)"),
+}
 
-def load_spy():
-    df = pd.read_csv(ROOT / "data" / "SPY_daily_1998_2021.csv", parse_dates=["Date"])
+
+def load_prices(key):
+    if key == "spy":
+        df = pd.read_csv(ROOT / "data" / "SPY_daily_1998_2021.csv", parse_dates=["Date"])
+    else:
+        import lppls as _lppls_pkg
+        nasdaq = Path(_lppls_pkg.__file__).parent / "data" / "nasdaq_dotcom.csv"
+        df = pd.read_csv(nasdaq, parse_dates=["Date"])
+        df = df.rename(columns={"Adj Close": "Close"})[["Date", "Close"]]
     df = df.sort_values("Date").reset_index(drop=True)
-    df = df[df.Date <= "2010-12-31"].reset_index(drop=True)
+    df = df[df.Date <= DATASETS[key]["end"]].reset_index(drop=True)
     df["logp"] = np.log(df["Close"])
     return df
 
@@ -87,7 +99,7 @@ def run_scan(df):
     t_start = time.time()
     for k, t2_idx in enumerate(t2_grid):
         pos_q = neg_q = pos_n = neg_n = 0
-        tcs, pcs = [], []
+        tcs, pcs, tcs_n, pcs_n = [], [], [], []
         for L in WINDOWS:
             t1_idx = t2_idx - L + 1
             if t1_idx < 0:
@@ -110,12 +122,16 @@ def run_scan(df):
                 neg_n += 1
                 if ok:
                     neg_q += 1
+                    tcs_n.append(tc)
+                    pcs_n.append(price_c)  # floor price for negative bubbles
         conf_rows.append(dict(
             t2_idx=t2_idx, date=df.loc[t2_idx, "Date"], price=df.loc[t2_idx, "Close"],
             pos_conf=pos_q / pos_n if pos_n else 0.0,
             neg_conf=neg_q / neg_n if neg_n else 0.0,
             med_tc_idx=np.median(tcs) if tcs else np.nan,
             med_price_c=np.median(pcs) if pcs else np.nan,
+            med_tc_idx_neg=np.median(tcs_n) if tcs_n else np.nan,
+            med_price_c_neg=np.median(pcs_n) if pcs_n else np.nan,
             n_pos_qual=pos_q,
         ))
         if (k + 1) % 100 == 0:
@@ -192,11 +208,19 @@ def paper_methods_on_episode(df, t2_idx, plnn_params):
 
 
 def main():
-    df = load_spy()
-    print(f"SPY scan range {df.Date.iloc[0].date()} -> {df.Date.iloc[-1].date()} "
+    import argparse
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--data", choices=list(DATASETS), default="spy")
+    args = ap.parse_args()
+    key = args.data
+
+    df = load_prices(key)
+    print(f"[{key}] scan range {df.Date.iloc[0].date()} -> {df.Date.iloc[-1].date()} "
           f"({len(df)} trading days)", flush=True)
     conf, fits = run_scan(df)
-    conf.to_csv(ROOT / "results" / "spy_scan_confidence.csv", index=False)
+    conf.to_csv(ROOT / "results" / f"{key}_scan_confidence.csv", index=False)
+    fits.to_csv(ROOT / "results" / f"{key}_scan_fits.csv", index=False)
 
     plnn_params = plnn.load_params(ROOT / "models" / "P-LNN-100K.npz")
     # warm-up JITs so per-episode fits are steady-state
@@ -211,8 +235,10 @@ def main():
             start_idx = int(c["t2_idx"].iloc[0])
             end_idx = int(c["t2_idx"].iloc[-1])
             ext_idx, ext_price, move = realised_outcome(df, start_idx, end_idx, positive=(sign == "positive"))
-            med_tc = c["med_tc_idx"].median() if sign == "positive" else np.nan
-            med_pc = c["med_price_c"].median() if sign == "positive" else np.nan
+            tc_col = "med_tc_idx" if sign == "positive" else "med_tc_idx_neg"
+            pc_col = "med_price_c" if sign == "positive" else "med_price_c_neg"
+            med_tc = c[tc_col].median()
+            med_pc = c[pc_col].median()
             ep_rows.append(dict(
                 sign=sign,
                 flag_start=c["date"].iloc[0].date(), flag_end=c["date"].iloc[-1].date(),
@@ -236,22 +262,22 @@ def main():
                         price_c_err_pct=round(100.0 * (r["price_c"] / ext_price - 1.0), 1),
                     ))
     eps = pd.DataFrame(ep_rows)
-    eps.to_csv(ROOT / "results" / "spy_bubble_episodes.csv", index=False)
+    eps.to_csv(ROOT / "results" / f"{key}_bubble_episodes.csv", index=False)
     mdf = pd.DataFrame(method_rows)
-    mdf.to_csv(ROOT / "results" / "spy_episode_methods.csv", index=False)
+    mdf.to_csv(ROOT / "results" / f"{key}_episode_methods.csv", index=False)
     print(eps.to_string(index=False), flush=True)
     print(mdf.to_string(index=False), flush=True)
 
-    plot(df, conf, eps)
+    plot(df, conf, eps, key)
     print("figure saved", flush=True)
 
 
-def plot(df, conf, eps):
+def plot(df, conf, eps, key):
     fig, (ax, ax2) = plt.subplots(
         2, 1, figsize=(15, 9), sharex=True,
         gridspec_kw={"height_ratios": [2.6, 1], "hspace": 0.05},
     )
-    ax.plot(df["Date"], df["Close"], color="black", lw=0.9, label="SPY close")
+    ax.plot(df["Date"], df["Close"], color="black", lw=0.9, label=f"{key.upper()} close")
     ax.set_yscale("log")
 
     # median predicted critical price, coloured by confidence
@@ -270,11 +296,11 @@ def plot(df, conf, eps):
         if e["sign"] == "positive":
             ax.axvline(pd.Timestamp(e["realised_extreme"]), color="black", ls="--", lw=1.0, alpha=0.7)
 
-    ax.set_ylabel("SPY close (log scale)")
+    ax.set_ylabel(f"{key.upper()} close (log scale)")
     ax.legend(loc="upper left", fontsize=9)
     ax.grid(alpha=0.25)
-    ax.set_title("SPY 1998-2010: LPPLS bubble scan - flagged episodes (red=positive, green=negative), "
-                 "predicted critical price, realised peaks (dashed)")
+    ax.set_title(f"{DATASETS[key]['label']}: LPPLS bubble scan - flagged episodes (red=positive, "
+                 "green=negative), predicted critical price, realised peaks (dashed)")
 
     ax2.plot(conf["date"], conf["pos_conf"], color="tab:red", lw=1.2, label="positive-bubble confidence")
     ax2.plot(conf["date"], conf["neg_conf"], color="tab:green", lw=1.2, label="negative-bubble confidence")
@@ -284,7 +310,7 @@ def plot(df, conf, eps):
     ax2.legend(loc="upper left", fontsize=9)
     ax2.grid(alpha=0.25)
     ax2.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
-    fig.savefig(ROOT / "results" / "fig_spy_bubble_scan.png", dpi=140, bbox_inches="tight")
+    fig.savefig(ROOT / "results" / f"fig_{key}_bubble_scan.png", dpi=140, bbox_inches="tight")
 
 
 if __name__ == "__main__":
