@@ -49,7 +49,8 @@ from lppls.lppls import LPPLS
 
 T2_STEP = 5
 WINDOWS = [40, 60, 80, 100, 126, 152, 189, 226, 252, 300, 350]
-CONF_THR = 0.30
+CONF_THR = 0.25     # sustained-episode threshold
+ISOLATED_THR = 0.40  # single scan points this strong are reported separately
 MIN_RUN = 2         # scan points above threshold to open an episode
 MERGE_GAP = 6       # scan points (= 30 trading days) allowed inside an episode
 N = 252             # resampled length for the paper-method fits
@@ -67,8 +68,8 @@ def load_prices(key):
     else:
         import lppls as _lppls_pkg
         nasdaq = Path(_lppls_pkg.__file__).parent / "data" / "nasdaq_dotcom.csv"
-        df = pd.read_csv(nasdaq, parse_dates=["Date"])
-        df = df.rename(columns={"Adj Close": "Close"})[["Date", "Close"]]
+        raw = pd.read_csv(nasdaq, parse_dates=["Date"])
+        df = pd.DataFrame({"Date": raw["Date"], "Close": raw["Adj Close"]})
     df = df.sort_values("Date").reset_index(drop=True)
     df = df[df.Date <= DATASETS[key]["end"]].reset_index(drop=True)
     df["logp"] = np.log(df["Close"])
@@ -212,15 +213,21 @@ def main():
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", choices=list(DATASETS), default="spy")
+    ap.add_argument("--reuse", action="store_true", help="reuse stored scan CSV, redo episode analysis only")
     args = ap.parse_args()
     key = args.data
 
     df = load_prices(key)
     print(f"[{key}] scan range {df.Date.iloc[0].date()} -> {df.Date.iloc[-1].date()} "
           f"({len(df)} trading days)", flush=True)
-    conf, fits = run_scan(df)
-    conf.to_csv(ROOT / "results" / f"{key}_scan_confidence.csv", index=False)
-    fits.to_csv(ROOT / "results" / f"{key}_scan_fits.csv", index=False)
+    conf_path = ROOT / "results" / f"{key}_scan_confidence.csv"
+    if args.reuse and conf_path.exists():
+        conf = pd.read_csv(conf_path, parse_dates=["date"])
+        print("  (reusing stored scan)", flush=True)
+    else:
+        conf, fits = run_scan(df)
+        conf.to_csv(conf_path, index=False)
+        fits.to_csv(ROOT / "results" / f"{key}_scan_fits.csv", index=False)
 
     plnn_params = plnn.load_params(ROOT / "models" / "P-LNN-100K.npz")
     # warm-up JITs so per-episode fits are steady-state
@@ -228,7 +235,15 @@ def main():
 
     ep_rows, method_rows = [], []
     for sign, col in [("positive", "pos_conf"), ("negative", "neg_conf")]:
-        for (i0, i1) in find_episodes(conf, col):
+        eps_idx = find_episodes(conf, col)
+        covered = set()
+        for (i0, i1) in eps_idx:
+            covered.update(range(i0, i1 + 1))
+        # isolated strong flags: single scan points >= ISOLATED_THR outside
+        # any sustained episode (too short for MIN_RUN, too strong to drop)
+        isolated = [i for i in np.where(conf[col].values >= ISOLATED_THR)[0] if i not in covered]
+        spans = [(i0, i1, "episode") for (i0, i1) in eps_idx] + [(i, i, "isolated") for i in isolated]
+        for (i0, i1, kind) in sorted(spans):
             c = conf.iloc[i0 : i1 + 1]
             peak_conf_row = c.loc[c[col].idxmax()]
             t2_star = int(peak_conf_row["t2_idx"])
@@ -240,7 +255,7 @@ def main():
             med_tc = c[tc_col].median()
             med_pc = c[pc_col].median()
             ep_rows.append(dict(
-                sign=sign,
+                sign=sign, type=kind,
                 flag_start=c["date"].iloc[0].date(), flag_end=c["date"].iloc[-1].date(),
                 max_conf=round(float(c[col].max()), 2),
                 pred_tc=(idx_to_date(df, med_tc).date() if np.isfinite(med_tc) else None),
@@ -252,7 +267,7 @@ def main():
             if sign == "positive":
                 for name, r in paper_methods_on_episode(df, t2_star, plnn_params).items():
                     method_rows.append(dict(
-                        episode=f"{c['date'].iloc[0].date()}..{c['date'].iloc[-1].date()}",
+                        episode=f"{c['date'].iloc[0].date()}..{c['date'].iloc[-1].date()} ({kind})",
                         t2=df.loc[t2_star, "Date"].date(), method=name,
                         pred_tc=idx_to_date(df, r["tc_idx"]).date(),
                         pred_price_c=round(r["price_c"], 2),
@@ -292,15 +307,20 @@ def plot(df, conf, eps, key):
 
     for _, e in eps.iterrows():
         color = "red" if e["sign"] == "positive" else "green"
-        ax.axvspan(pd.Timestamp(e["flag_start"]), pd.Timestamp(e["flag_end"]), color=color, alpha=0.15)
+        if e["type"] == "isolated":
+            y0 = df["Close"].min() * 1.02
+            ax.plot(pd.Timestamp(e["flag_start"]), y0, marker="^", color=color, ms=9,
+                    mec="black", mew=0.5, zorder=6)
+        else:
+            ax.axvspan(pd.Timestamp(e["flag_start"]), pd.Timestamp(e["flag_end"]), color=color, alpha=0.15)
         if e["sign"] == "positive":
             ax.axvline(pd.Timestamp(e["realised_extreme"]), color="black", ls="--", lw=1.0, alpha=0.7)
 
     ax.set_ylabel(f"{key.upper()} close (log scale)")
     ax.legend(loc="upper left", fontsize=9)
     ax.grid(alpha=0.25)
-    ax.set_title(f"{DATASETS[key]['label']}: LPPLS bubble scan - flagged episodes (red=positive, "
-                 "green=negative), predicted critical price, realised peaks (dashed)")
+    ax.set_title(f"{DATASETS[key]['label']}: LPPLS bubble scan - episodes (shaded, red=positive, "
+                 "green=negative), isolated strong flags (triangles), predicted critical price, realised peaks (dashed)")
 
     ax2.plot(conf["date"], conf["pos_conf"], color="tab:red", lw=1.2, label="positive-bubble confidence")
     ax2.plot(conf["date"], conf["neg_conf"], color="tab:green", lw=1.2, label="negative-bubble confidence")
