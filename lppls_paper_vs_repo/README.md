@@ -322,12 +322,15 @@ single points ≥ 0.40 are reported separately.
 
 Per-episode predictions of each paper method (LM, M-LNN, M-LNN-KAN,
 P-LNN-100K), standing at the highest-confidence date of each episode, are in
-`results/spy_episode_methods.csv` — notably the **critical price** is again
-far better estimated than the critical time (e.g. at the 2007-05-23 flag,
-4.5 months before the actual GFC top at 156.40, the four methods predicted
-price_c = 161.6 / 158.5 / 154.8 / 151.3 — all within ±3.3% — while their t_c
-estimates were 2–3 months early). The M-LNN-KAN gives the best price_c in 4
-of the 6 flagged positive events.
+`results/spy_episode_methods.csv` and visualised below — notably the
+**critical price** is again far better estimated than the critical time
+(e.g. at the 2007-05-23 flag, 4.5 months before the actual GFC top at 156.40,
+the four methods predicted price_c = 161.6 / 158.5 / 154.8 / 151.3 — all
+within ±3.3% — while their t_c estimates were 2–3 months early). The
+M-LNN-KAN gives the best price_c in 4 of the 6 flagged positive events.
+
+![SPY episode methods](results/fig_spy_episode_methods.png)
+![Nasdaq episode methods](results/fig_nasdaq_episode_methods.png)
 
 **What is *not* flagged is as informative as what is.** The dot-com top
 (2000-03) produces no signal on SPY — diagnostics show the S&P's 1999–2000
