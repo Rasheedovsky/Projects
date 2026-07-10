@@ -10,9 +10,11 @@ fits that pass the reference repo's qualification filters, and render:
   * main panel  - price history, the qualified LPPLS fits, and the ensemble
                   confidence (share of qualified fits)
 
-Two ensembles are shown: the classical Nelder-Mead multistart (red, the
-reference repo's fit - ~1.5 s per snapshot) and the paper's pre-trained
-P-LNN-100K (purple, ~50 ms per snapshot) - each across ~24 window lengths.
+Five ensembles are shown, each across the window-length grid: the reference
+repo's Nelder-Mead (red), the paper's LM (blue), M-LNN (orange), the
+M-LNN-KAN extension (cyan) and the pre-trained P-LNN-100K (purple). Refresh
+cost is dominated by the per-series networks (~95 s for a full 24-window
+snapshot; ~50 ms for a P-LNN-only refresh).
 
 Usage:
   snapshot: python scripts/live_lppls_indicator.py --data tasi --date 2022-04-08
@@ -36,7 +38,7 @@ from scipy.stats import gaussian_kde
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from deep_lppls import plnn
+from deep_lppls import kan, lm, mlnn, plnn
 from deep_lppls.core import minmax_scale, solve_linear
 from lppls.lppls import LPPLS
 from spy_bubble_scan import qualify
@@ -59,14 +61,36 @@ def load(key):
     return df
 
 
-def fit_ensembles(df, t2_idx, plnn_params):
-    """Ensemble fits at t2 over WINDOW_LENGTHS. Returns dict per ensemble:
-    list of dicts (tc_idx, price_c, qualified, params...)."""
+def _norm_record(tc, m, w, x_scaled, scale, t2_idx, L):
+    """Shared post-processing for methods fitted on the normalised window:
+    linear solve -> price_c, qualification filters in normalised units."""
+    mn, rng = scale
+    t_norm = np.linspace(0.0, 1.0, N)
+    a, b, c1, c2 = solve_linear(t_norm, x_scaled, tc, m, w)
+    tc_idx = t2_idx + (tc - 1.0) * (L - 1)
+    denom = tc - 1.0
+    O = (w / (2 * np.pi)) * np.log(tc / denom) if denom > 0 else np.inf
+    c_abs = float(np.hypot(c1, c2))
+    D = (m * abs(b)) / (w * c_abs) if c_abs > 0 else np.inf
+    ok = (
+        (t2_idx - min(60, 0.5 * (L - 1))) < tc_idx < (t2_idx + min(252, 0.5 * (L - 1)))
+        and 0 < m < 1 and 2 < w < 15 and O > 2.5 and D > 0.5 and b < 0
+    )
+    return dict(tc_idx=float(tc_idx), price_c=float(np.exp(a * rng + mn)),
+                qualified=bool(ok), m=float(m), w=float(w), L=L)
+
+
+def fit_ensembles(df, t2_idx, plnn_params, heavy_stride=1):
+    """Ensemble fits at t2 over WINDOW_LENGTHS for ALL methods. Returns dict
+    per ensemble: list of dicts (tc_idx, price_c, qualified, ...). The
+    per-series methods (LM, M-LNN, M-LNN-KAN) fit every heavy_stride-th
+    window (they cost 0.5-3 s per fit; NM and P-LNN fit every window)."""
     t_all = np.arange(len(df), dtype=float)
     logp = df["logp"].values
     model = LPPLS(observations=np.array([t_all, logp]))
-    out = {"NM": [], "P-LNN": []}
-    for L in WINDOW_LENGTHS:
+    out = {"NM": [], "LM": [], "M-LNN": [], "M-LNN-KAN": [], "P-LNN": []}
+    t_norm = np.linspace(0.0, 1.0, N)
+    for wi, L in enumerate(WINDOW_LENGTHS):
         t1_idx = t2_idx - L + 1
         if t1_idx < 0:
             continue
@@ -77,25 +101,22 @@ def fit_ensembles(df, t2_idx, plnn_params):
             ok = qualify(tc, m, w, b, c, O, D, float(t1_idx), float(t2_idx))
             out["NM"].append(dict(tc_idx=tc, price_c=float(np.exp(a)), qualified=ok,
                                   m=m, w=w, b=b, c1=c1, c2=c2, a=a, t1_idx=t1_idx, L=L))
-        # --- P-LNN-100K on the resampled min-max-scaled window ---
+        # --- normalised 252-point window shared by the paper's methods ---
         win = logp[t1_idx : t2_idx + 1]
-        x = np.interp(np.linspace(0, 1, N), np.linspace(0, 1, len(win)), win)
-        x_scaled, (mn, rng) = minmax_scale(x)
+        x = np.interp(t_norm, np.linspace(0, 1, len(win)), win)
+        x_scaled, scale = minmax_scale(x)
+
         tcn, mn_, wn = (float(v) for v in plnn.predict(plnn_params, x_scaled.astype(np.float32))[0])
-        t_norm = np.linspace(0.0, 1.0, N)
-        a4, b4, c14, c24 = solve_linear(t_norm, x_scaled, tcn, mn_, wn)
-        tc_idx = t2_idx + (tcn - 1.0) * (L - 1)
-        # qualification: same filters, in normalised units (O, D from fit)
-        denom = tcn - 1.0
-        O_p = (wn / (2 * np.pi)) * np.log(tcn / denom) if denom > 0 else np.inf
-        c_abs = float(np.hypot(c14, c24))
-        D_p = (mn_ * abs(b4)) / (wn * c_abs) if c_abs > 0 else np.inf
-        ok = (
-            (t2_idx - min(60, 0.5 * (L - 1))) < tc_idx < (t2_idx + min(252, 0.5 * (L - 1)))
-            and 0 < mn_ < 1 and 2 < wn < 15 and O_p > 2.5 and D_p > 0.5 and b4 < 0
-        )
-        out["P-LNN"].append(dict(tc_idx=float(tc_idx), price_c=float(np.exp(a4 * rng + mn)),
-                                 qualified=bool(ok), m=mn_, w=wn, L=L))
+        out["P-LNN"].append(_norm_record(tcn, mn_, wn, x_scaled, scale, t2_idx, L))
+
+        if wi % heavy_stride == 0:
+            seed = t2_idx * 1000 + L
+            r = lm.fit_lm(t_norm, x_scaled, seed=seed)
+            out["LM"].append(_norm_record(r["tc"], r["m"], r["w"], x_scaled, scale, t2_idx, L))
+            r = mlnn.fit_mlnn(x_scaled, seed=seed)
+            out["M-LNN"].append(_norm_record(r["tc"], r["m"], r["w"], x_scaled, scale, t2_idx, L))
+            r = kan.fit_mlnn_kan(x_scaled, seed=seed)
+            out["M-LNN-KAN"].append(_norm_record(r["tc"], r["m"], r["w"], x_scaled, scale, t2_idx, L))
     return out
 
 
@@ -132,8 +153,10 @@ def render(df, t2_idx, ensembles, key, ax_cache=None):
     ax.set_xlim(x_lo, x_hi)
     ax.set_ylim(price_lo, price_hi)
 
-    colors = {"NM": "tab:red", "P-LNN": "tab:purple"}
-    labels = {"NM": "lppls-repo NM ensemble", "P-LNN": "P-LNN-100K ensemble"}
+    colors = {"NM": "tab:red", "LM": "tab:blue", "M-LNN": "tab:orange",
+              "M-LNN-KAN": "tab:cyan", "P-LNN": "tab:purple"}
+    labels = {"NM": "lppls-repo NM", "LM": "LM", "M-LNN": "M-LNN",
+              "M-LNN-KAN": "M-LNN-KAN", "P-LNN": "P-LNN-100K"}
     conf_txt = []
     day_grid = np.linspace(t2_idx - 30, t2_idx + FUTURE_SHOW, 300)
     date_grid = [idx_to_date(df, v) for v in day_grid]
@@ -142,7 +165,7 @@ def render(df, t2_idx, ensembles, key, ax_cache=None):
     for name, fits in ensembles.items():
         q = [f for f in fits if f["qualified"]]
         conf = len(q) / len(fits) if fits else 0.0
-        conf_txt.append(f"{labels[name]}: conf {conf:.0%} ({len(q)}/{len(fits)})")
+        conf_txt.append(f"{labels[name]} {conf:.0%} ({len(q)}/{len(fits)})")
         # draw qualified NM fits faintly in the main panel
         if name == "NM":
             t_all = np.arange(len(df), dtype=float)
@@ -175,8 +198,8 @@ def render(df, t2_idx, ensembles, key, ax_cache=None):
     ax_t.axvline(df.loc[t2_idx, "Date"], color="red", ls="-.", lw=1.2)
     ax_t.set_ylabel("PDF($t_c$)")
     ax_t.set_yticks([])
-    ax_t.set_title(f"{DATASETS[key]['label']} live LPPLS indicator @ {df.loc[t2_idx, 'Date'].date()}   |   "
-                   + "   |   ".join(conf_txt), fontsize=11)
+    ax_t.set_title(f"{DATASETS[key]['label']} live LPPLS indicator @ {df.loc[t2_idx, 'Date'].date()}\n"
+                   "confidence: " + "  |  ".join(conf_txt), fontsize=10)
     ax_p.set_xlabel("PDF(price$_c$)")
     ax_p.set_xticks([])
     plt.setp(ax_p.get_yticklabels(), visible=False)
@@ -195,6 +218,9 @@ def main():
     ap.add_argument("--date", help="snapshot date YYYY-MM-DD")
     ap.add_argument("--animate", nargs=2, metavar=("START", "END"), help="GIF over date range")
     ap.add_argument("--step", type=int, default=5, help="trading days between frames")
+    ap.add_argument("--stride", type=int, default=None,
+                    help="window stride for the slow per-series methods "
+                         "(default 1 for snapshots, 2 for animations)")
     args = ap.parse_args()
 
     df = load(args.data)
@@ -206,10 +232,11 @@ def main():
     if args.animate:
         from PIL import Image
 
+        stride = args.stride if args.stride else 2
         i0, i1 = nearest_idx(args.animate[0]), nearest_idx(args.animate[1])
         frames = []
         for k, t2_idx in enumerate(range(i0, i1 + 1, args.step)):
-            ens = fit_ensembles(df, t2_idx, plnn_params)
+            ens = fit_ensembles(df, t2_idx, plnn_params, heavy_stride=stride)
             fig = render(df, t2_idx, ens, args.data)
             fig.canvas.draw()
             frames.append(Image.fromarray(np.asarray(fig.canvas.buffer_rgba())[..., :3]))
@@ -221,7 +248,7 @@ def main():
         print(f"saved {out} ({len(frames)} frames)")
     else:
         t2_idx = nearest_idx(args.date)
-        ens = fit_ensembles(df, t2_idx, plnn_params)
+        ens = fit_ensembles(df, t2_idx, plnn_params, heavy_stride=args.stride or 1)
         fig = render(df, t2_idx, ens, args.data)
         out = ROOT / "results" / f"fig_live_indicator_{args.data}_{args.date}.png"
         fig.savefig(out, dpi=140, bbox_inches="tight")
