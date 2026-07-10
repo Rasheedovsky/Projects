@@ -81,9 +81,21 @@ def resample_window(logp_window):
     return np.interp(dst, src, logp_window)
 
 
-def fit_all_methods(x_scaled, plnn_models, seed):
+def critical_price(x_scaled, mn, rng, tc, m, w):
+    """Critical price p_c = exp(A): the LPPLS log-price at tc (O(tc) = A,
+    Eq. 1), with A obtained from the analytic solve on the scaled window and
+    mapped back through the min-max scaling of the log-price."""
+    if not np.isfinite(tc):
+        return np.nan
+    a = solve_linear(np.linspace(0.0, 1.0, N), x_scaled, tc, m, w)[0]
+    return float(np.exp(a * rng + mn))
+
+
+def fit_all_methods(x_scaled, scale, plnn_models, seed):
     """Fit one min-max-scaled 252-point window with every method.
-    Returns {method: (result dict, seconds)}; tc in normalised window units."""
+    Returns {method: (result dict, seconds)}; tc in normalised window units,
+    price_c in original price units. scale = (mn, rng) of the log-price."""
+    mn, rng = scale
     t = np.linspace(0.0, 1.0, N)
     t_days = np.arange(N, dtype=float)
     out = {}
@@ -111,6 +123,11 @@ def fit_all_methods(x_scaled, plnn_models, seed):
         t0 = time.perf_counter()
         p = plnn.predict(params, x_scaled.astype(np.float32))[0]
         out[name] = (dict(tc=float(p[0]), m=float(p[1]), w=float(p[2])), time.perf_counter() - t0)
+
+    # critical price for every method (outside the timed sections: it is a
+    # post-processing step shared by all calibrations)
+    for name, (r, dt) in out.items():
+        r["price_c"] = critical_price(x_scaled, mn, rng, r["tc"], r["m"], r["w"])
     return out
 
 
@@ -134,7 +151,7 @@ def main():
 
     # warm-up so one-time JIT compilation doesn't pollute per-fit timings
     dummy = np.linspace(0.0, 1.0, N) + 0.01 * np.random.default_rng(0).standard_normal(N)
-    fit_all_methods(dummy, plnn_models, seed=0)
+    fit_all_methods(dummy, (0.0, 1.0), plnn_models, seed=0)
 
     rows, timing = [], {}
     for t2_off in T2_OFFSETS:
@@ -145,8 +162,9 @@ def main():
                 continue
             win = df["logp"].iloc[t1_idx : t2_idx + 1].values
             x_res = resample_window(win)
-            x_scaled, _ = minmax_scale(x_res)
-            res = fit_all_methods(x_scaled, plnn_models, seed=t2_off * 1000 + L)
+            x_scaled, scale = minmax_scale(x_res)
+            res = fit_all_methods(x_scaled, scale, plnn_models, seed=t2_off * 1000 + L)
+            peak_price = float(df.loc[peak_idx, "Close"])
             for method, (r, dt) in res.items():
                 # normalised tc -> trading days after t2 (window spans L
                 # trading days mapped onto [0, 1])
@@ -158,6 +176,8 @@ def main():
                     tc_norm=r["tc"], m=r["m"], w=r["w"],
                     tc_days_after_t2=tc_days_after_t2, tc_idx=tc_idx,
                     tc_days_vs_peak=(tc_idx - peak_idx) if np.isfinite(tc_idx) else np.nan,
+                    price_c=r["price_c"],
+                    price_c_vs_peak_pct=100.0 * (r["price_c"] / peak_price - 1.0) if np.isfinite(r["price_c"]) else np.nan,
                     seconds=dt,
                 ))
                 timing.setdefault(method, []).append(dt)
@@ -175,6 +195,8 @@ def main():
         median_tc_vs_peak_days=("tc_days_vs_peak", "median"),
         iqr_lo=("tc_days_vs_peak", lambda s: s.quantile(0.25)),
         iqr_hi=("tc_days_vs_peak", lambda s: s.quantile(0.75)),
+        median_price_c=("price_c", "median"),
+        median_price_c_vs_peak_pct=("price_c_vs_peak_pct", "median"),
         median_m=("m", "median"), median_w=("w", "median"),
         n_valid=("tc_days_vs_peak", lambda s: s.notna().sum()),
     ).round(2)
