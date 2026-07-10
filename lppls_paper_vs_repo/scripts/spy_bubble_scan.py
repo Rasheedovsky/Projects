@@ -295,8 +295,11 @@ def plot(df, conf, eps, key):
     ax.plot(df["Date"], df["Close"], color="black", lw=0.9, label=f"{key.upper()} close")
     ax.set_yscale("log")
 
-    # median predicted critical price, coloured by confidence
+    # median predicted critical price, coloured by confidence (clipped to a
+    # readable band: a handful of runaway ensemble medians would otherwise
+    # stretch the log axis)
     ok = conf[conf["med_price_c"].notna() & (conf["pos_conf"] >= CONF_THR)]
+    ok = ok[(ok["med_price_c"] > 0.5 * df["Close"].min()) & (ok["med_price_c"] < 2.0 * df["Close"].max())]
     sc = ax.scatter(
         [idx_to_date(df, v) for v in ok["med_tc_idx"]], ok["med_price_c"],
         c=ok["pos_conf"], cmap="Reds", vmin=CONF_THR, vmax=1.0, s=22,

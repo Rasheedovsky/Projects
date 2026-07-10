@@ -27,6 +27,8 @@ scripts/
                            (--kan-merge adds the M-LNN-KAN to stored results)
   compare_empirical.py     bubble episode comparison: fits + t_c PDFs + timing
                            (--data tasi | spy; paper Fig. 4 protocol)
+  spy_bubble_scan.py       rolling bubble census w/ critical prices
+                           (--data spy | nasdaq; episode detection + price_c)
   tasi_confidence_repo.py  Boulder package confidence indicator on TASI (bonus)
 data/
   TASI_daily_2020_2024.csv daily TASI closes (validated against public records)
@@ -293,6 +295,59 @@ Reading:
   the ReLU M-LNN remains the better accuracy-per-second trade; if forecast
   quality on strongly bubbly series is the only criterion, the KAN variant is
   worth the extra compute.
+
+# Bubble census: SPY 1998–2010 with critical prices
+
+`scripts/spy_bubble_scan.py` runs a rolling LPPLS scan (t₂ every 5 trading
+days × 11 window lengths from 40 to 350 days, fits qualified by the reference
+repo's default filter conditions) and reports, for every detected episode,
+the predicted critical time **and critical price** p_c = exp(A). Sustained
+episodes require confidence ≥ 0.25 on ≥ 2 consecutive scan points; isolated
+single points ≥ 0.40 are reported separately.
+
+![SPY bubble scan](results/fig_spy_bubble_scan.png)
+
+**Every detection on SPY 1998–2010** (`results/spy_bubble_episodes.csv`):
+
+| Flagged (sign) | max conf | ensemble pred. t_c / price_c | realised extreme | outcome after |
+|---|---|---|---|---|
+| 2003-12→2004-03 (pos) | 0.29 | 2004-01-10 / 120.55 | 2004-03-05 @ 116.29 | −8.1% |
+| 2006-10→2006-11 (pos) | 0.67 | 2006-11-20 / 145.21 | 2007-06-04 @ 154.24 | −8.7% |
+| 2007-02-20 (pos, isolated) | 0.40 | — | 2007-07-19 @ 155.22 | −15.6% |
+| 2007-05-23 (pos, isolated) | 0.40 | — | 2007-10-09 @ 156.40 | −18.2% (GFC top) |
+| 2009-09-24 (pos, isolated) | 0.43 | — | 2010-03/04 rally top | −12.9% (flash crash) |
+| 2010-12 (pos) | 0.33 | 2010-12-16 / 124.99 | data edge | truncated |
+| 2001-03→04 (neg) | 0.67 | 2001-04-11 / 54.12 (floor) | trough 2001-09-21 @ 96.85 | +21.5% |
+| 2002-07→08 (neg) | **1.00** | 2002-07-29 / 42.07 (floor) | trough 2002-10-09 @ 78.00 | +21.0% |
+
+Per-episode predictions of each paper method (LM, M-LNN, M-LNN-KAN,
+P-LNN-100K), standing at the highest-confidence date of each episode, are in
+`results/spy_episode_methods.csv` — notably the **critical price** is again
+far better estimated than the critical time (e.g. at the 2007-05-23 flag,
+4.5 months before the actual GFC top at 156.40, the four methods predicted
+price_c = 161.6 / 158.5 / 154.8 / 151.3 — all within ±3.3% — while their t_c
+estimates were 2–3 months early). The M-LNN-KAN gives the best price_c in 4
+of the 6 flagged positive events.
+
+**What is *not* flagged is as informative as what is.** The dot-com top
+(2000-03) produces no signal on SPY — diagnostics show the S&P's 1999–2000
+ascent violates the LPPLS conditions (m outside (0,1), damping < 0.5 on
+nearly every window): the index rose in a choppy double-top, not a
+super-exponential. To verify this is an asset property and not a detector
+failure, the identical scan on the reference repo's bundled **Nasdaq**
+dot-com data flags a sustained episode from **1999-11-11 to 2000-03-08 (max
+conf 0.50), with ensemble t_c = 2000-02-10 and critical price 5,371 against
+the realised 5,049 top on 2000-03-10** — plus the well-documented sequence of
+Nasdaq mini-bubbles of 1995 (conf 1.0), 1996, 1997 (pre-Asian-crisis) and
+January 1999:
+
+![Nasdaq bubble scan](results/fig_nasdaq_bubble_scan.png)
+
+Caveats: the 1998 LTCM peak sits too close to the SPY data's left edge to be
+scannable; the March-2009 bottom peaks at 0.25 negative confidence (just
+under threshold); the 2010-12 flag and the Nasdaq 2000-03 "outcome" are
+truncated by their data ends. Scan cost: ~6,900 Nelder-Mead ensemble fits
+in ~8 minutes of wall-clock on 1 CPU core.
 
 # Conclusions
 
