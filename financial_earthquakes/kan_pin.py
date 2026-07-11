@@ -302,7 +302,8 @@ class KANPINHawkes:
 
     # ------------- phase B: calibrate eta against the frozen network ----
 
-    def _calibrate_eta(self, params, adam_steps: int = 400) -> np.ndarray:
+    def _calibrate_eta(self, params, adam_steps: int = 400,
+                       eta_start=None) -> np.ndarray:
         """With the network frozen, choose eta to satisfy the physics: an
         ordinary nonlinear least squares in 5 parameters.  A coarse grid
         over (K0, c) - with mu tied through the stationarity relation
@@ -318,14 +319,17 @@ class KANPINHawkes:
             incr_phys = self._integrated_lambda(eta, s[:-1], s[1:])
             return anp.mean(((incr_net - incr_phys) / scale) ** 2)
 
-        best, best_val = None, np.inf
-        for K0 in (0.05, 0.2, 0.4, 0.6, 0.8):
-            for c in np.geomspace(1.0, self.T / 12, 8):
-                eta = np.array([max(self.rho * (1 - K0), self.lower[0]), K0,
-                                params["eta"][2], c, params["eta"][4]])
-                val = float(L_de_of(eta))
-                if val < best_val:
-                    best, best_val = eta, val
+        if eta_start is not None:            # warm start: skip the grid
+            best = np.asarray(eta_start, dtype=float)
+        else:
+            best, best_val = None, np.inf
+            for K0 in (0.05, 0.2, 0.4, 0.6, 0.8):
+                for c in np.geomspace(1.0, self.T / 12, 8):
+                    eta = np.array([max(self.rho * (1 - K0), self.lower[0]), K0,
+                                    params["eta"][2], c, params["eta"][4]])
+                    val = float(L_de_of(eta))
+                    if val < best_val:
+                        best, best_val = eta, val
         g_eta = grad(L_de_of)
         eta = best.copy()
         m = np.zeros_like(eta); v = np.zeros_like(eta)
@@ -340,7 +344,8 @@ class KANPINHawkes:
     # ------------- the full curriculum -------------
 
     def fit(self, epochs: int = 800, lr: float = 2e-3, lr_end: float = 2e-4,
-            penalty: float = 1.0, ridge: float = 1e-4, verbose: bool = True):
+            penalty: float = 1.0, ridge: float = 1e-4, verbose: bool = True,
+            warm_eta=None, calibrate_steps: int = 400):
         """Run phases A (staircase LS solve), B (eta calibration),
         B2 (physics-projection LS solve), then `epochs` of MDMM (phase C)."""
         # ---- phase A: exact LS fit of the KAN to the staircase ----
@@ -348,8 +353,11 @@ class KANPINHawkes:
         L = self._losses(self.params)
         if verbose:
             print(f"  phase A  (staircase solve) L_data={L[0]:.3e}")
-        # ---- phase B: calibrate eta on the frozen network ----
-        self.params["eta"] = self._calibrate_eta(self.params)
+        # ---- phase B: calibrate eta on the frozen network (warm-started
+        # from a previous day's solution when walk-forwarding daily) ----
+        self.params["eta"] = self._calibrate_eta(self.params,
+                                                 adam_steps=calibrate_steps,
+                                                 eta_start=warm_eta)
         if verbose:
             print(f"  phase B  (eta calibration) eta={np.round(self.params['eta'], 4)}")
         # ---- phase B2: project the network onto the physics manifold ----

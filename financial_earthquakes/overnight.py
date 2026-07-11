@@ -178,8 +178,8 @@ class OvernightETAS:
 
     def intensity(self, t, theta=None):
         mu, s, o = self._terms(t, theta or self.theta)
-        lam = mu + s + o
-        return lam if np.size(lam) > 1 else float(lam)
+        lam = np.atleast_1d(mu + s + o)
+        return lam if lam.size != 1 else float(lam[0])
 
     def compensator(self, t, theta=None):
         th = theta or self.theta
@@ -202,19 +202,24 @@ class OvernightETAS:
             return 1e10
         return -(np.log(lam).sum() - self.compensator(self.events.T, theta))
 
-    def fit(self, n_starts: int = 10, seed: int = 1):
+    def fit(self, n_starts: int = 10, seed: int = 1, x0_extra=None):
         ev, src = self.events, self.src
         rate = ev.n / ev.T
         rng = np.random.default_rng(seed)
         mag_sd = max(src.mags.std(), 1e-4)
         bounds = [(1e-8, 5 * rate), (0.0, 0.995), (1e-2, ev.T / 10),
                   (0.0, 3.0), (0.0, 2.0 / mag_sd), (1e-2, ev.T / 10)]
-        best = None
+        starts = []
+        if x0_extra is not None:               # warm start (daily refits)
+            starts.append([float(np.clip(v, lo, hi)) for v, (lo, hi)
+                           in zip(x0_extra, bounds)])
         for _ in range(n_starts):
-            x0 = [rate * rng.uniform(0.3, 0.9), rng.uniform(0.05, 0.5),
-                  np.exp(rng.uniform(0, np.log(ev.T / 20))),
-                  rng.uniform(0.05, 0.8), rng.uniform(0.0, 30.0),
-                  np.exp(rng.uniform(0, np.log(30.0)))]
+            starts.append([rate * rng.uniform(0.3, 0.9), rng.uniform(0.05, 0.5),
+                           np.exp(rng.uniform(0, np.log(ev.T / 20))),
+                           rng.uniform(0.05, 0.8), rng.uniform(0.0, 30.0),
+                           np.exp(rng.uniform(0, np.log(30.0)))])
+        best = None
+        for x0 in starts:
             res = minimize(self._nll, x0, method="L-BFGS-B", bounds=bounds)
             if best is None or res.fun < best.fun:
                 best = res
@@ -348,7 +353,8 @@ class KANPINOvernight(KANPINHawkes):
         out = out + Ko * anp.sum(boost * (PHI(ob, co) - PHI(oa, co)), axis=1)
         return out
 
-    def _calibrate_eta(self, params, adam_steps: int = 400) -> np.ndarray:
+    def _calibrate_eta(self, params, adam_steps: int = 400,
+                       eta_start=None) -> np.ndarray:
         layers = params["layers"]
         s = self.s_nodes
         Gs = np.asarray(self._G(layers, s))
@@ -360,8 +366,12 @@ class KANPINOvernight(KANPINHawkes):
             incr_phys = self._integrated_lambda(eta, s[:-1], s[1:])
             return anp.mean(((incr_net - incr_phys) / scale) ** 2)
 
-        best, best_val = None, np.inf
-        for Ks in (0.05, 0.3, 0.6):
+        if eta_start is not None:
+            best = np.asarray(eta_start, dtype=float)
+            best_val = float(L_de_of(best))
+        else:
+            best, best_val = None, np.inf
+        for Ks in (() if eta_start is not None else (0.05, 0.3, 0.6)):
             for cs in np.geomspace(1.0, self.T / 12, 5):
                 for Ko in (0.05, 0.3, 0.6):
                     for co in (2.0, 7.0, 21.0):
@@ -477,4 +487,94 @@ def walk_forward_overnight(events: EventData, src: GapStream,
                   f"LR={lr['LR']:5.1f}(p={lr['pvalue']:.3f}) "
                   f"Ny={ny['joint']:.2f} | OOS: full {s_full:6.1f} "
                   f"self {s_self:6.1f} KP {s_kp:6.1f} Pois {s_pois:6.1f}")
+    return pd.DataFrame(rows)
+
+
+# ----------------------------------------------------------------------
+# 5. DAILY walk-forward: refit every trading day (warm-started)
+# ----------------------------------------------------------------------
+
+def walk_forward_daily(falls: EventData, runs: EventData, src_all: GapStream,
+                       gaps_all: pd.DataFrame, start_days: int = 30,
+                       kanpin_epochs: int = 60, kanpin_cal: int = 120,
+                       seed: int = 1, verbose_every: int = 40) -> pd.DataFrame:
+    """Walk-forward with DAILY re-estimation.
+
+    For each trading day d (after a `start_days` burn-in):
+      * refit, on data strictly before day d's open (warm-started from the
+        previous day): the overnight-trigger MLE for falls AND for runs,
+        the self-only ETAS benchmark, and the KAN-PIN overnight model (falls);
+      * at day d's open - when the overnight gap g_d IS known - compute each
+        model's probability of >= 1 extreme fall / run during day d, and
+        score all parameter sets on day d with the predictive log-score
+        (Poisson benchmark from the training window's event rate).
+
+    Returns one row per evaluated day.
+    """
+    day_starts = np.concatenate([[1.0], gaps_all["time"].values + 0.5])
+    n_days = len(day_starts)
+    day_ends = np.concatenate([day_starts[1:] - 1.0, [falls.T]])
+    warm_f = warm_r = None
+    warm_kp_eta = None
+    rows = []
+    rng = np.random.default_rng(seed)
+    for d in range(start_days, n_days):
+        t_open = day_starts[d] - 0.5          # the gap fires here
+        tau = t_open - 0.1                    # fit strictly before today
+        b = day_ends[d]
+        ev_f, src_w = _truncate(falls, src_all, tau)
+        ev_r, _ = _truncate(runs, src_all, tau)
+        if ev_f.n < 5 or ev_r.n < 5:
+            continue
+        # ---- daily refits (warm-started) ----
+        mf = OvernightETAS(ev_f, src_w).fit(n_starts=3, seed=seed, x0_extra=warm_f)
+        mr = OvernightETAS(ev_r, src_w).fit(n_starts=3, seed=seed, x0_extra=warm_r)
+        warm_f = [mf.theta[k] for k in mf.PARAM_NAMES]
+        warm_r = [mr.theta[k] for k in mr.PARAM_NAMES]
+        so = ETASModel(kernel="exp", use_alpha=False).fit(ev_f, seed=seed,
+                                                          n_starts=3)
+        kp = KANPINOvernight(ev_f, src_w, seed=seed)
+        kp.fit(epochs=kanpin_epochs, calibrate_steps=kanpin_cal,
+               warm_eta=warm_kp_eta, verbose=False)
+        ek = kp.eta_hat
+        warm_kp_eta = np.array([ek[k] for k in OvernightETAS.PARAM_NAMES])
+        # ---- day-d forecasts at the open (gap known) ----
+        def day_prob(theta, events):
+            m = OvernightETAS(events, src_all)  # full streams as history
+            m.theta = theta
+            dLam = m.compensator(b) - m.compensator(t_open)
+            return 1.0 - np.exp(-dLam), dLam
+        p_fall, e_fall = day_prob(mf.theta, falls)
+        p_run, e_run = day_prob(mr.theta, runs)
+        # ---- day-d OOS log-scores (falls target) ----
+        s_full = _segment_score(mf.theta, falls, src_all, t_open, b)
+        s_kp = _segment_score(ek, falls, src_all, t_open, b)
+        s_self = _segment_score({"mu": so.mu, "K_s": so.K0, "c_s": so.c,
+                                 "K_o": 0.0, "alpha_o": 0.0, "c_o": 1.0},
+                                falls, src_all, t_open, b)
+        rate = ev_f.n / tau
+        n_seg = int(np.sum((falls.times > t_open) & (falls.times <= b)))
+        s_pois = (n_seg * np.log(rate) if n_seg else 0.0) - rate * (b - t_open)
+        gap_today = gaps_all.iloc[d - 1]["gap"] if d >= 1 else 0.0
+        rows.append({
+            "day": d, "date": falls.time_to_stamp(day_starts[d]),
+            "gap": float(gap_today), "big_gap": abs(gap_today) >= src_all.G0,
+            "p_fall": p_fall, "p_run": p_run,
+            "e_fall": e_fall, "e_run": e_run,
+            "realized_fall": bool(n_seg),
+            "realized_run": bool(np.sum((runs.times > t_open) & (runs.times <= b))),
+            "mle_K_o": mf.theta["K_o"], "mle_K_s": mf.theta["K_s"],
+            "mle_c_o": mf.theta["c_o"], "kp_K_o": ek["K_o"], "kp_K_s": ek["K_s"],
+            "run_K_o": mr.theta["K_o"],
+            "oos_full": s_full, "oos_selfonly": s_self,
+            "oos_kanpin": s_kp, "oos_poisson": s_pois,
+        })
+        if verbose_every and (len(rows) % verbose_every == 0):
+            r = rows[-1]
+            print(f"  day {d:3d} ({r['date'].date()}) gap={r['gap']:+.3f} "
+                  f"P(fall)={p_fall:.2f} P(run)={p_run:.2f} "
+                  f"K_o={r['mle_K_o']:.2f} | cum OOS-Pois: "
+                  f"full {sum(x['oos_full']-x['oos_poisson'] for x in rows):+.1f} "
+                  f"self {sum(x['oos_selfonly']-x['oos_poisson'] for x in rows):+.1f} "
+                  f"KP {sum(x['oos_kanpin']-x['oos_poisson'] for x in rows):+.1f}")
     return pd.DataFrame(rows)

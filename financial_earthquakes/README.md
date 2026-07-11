@@ -248,6 +248,20 @@ variant detects the same gap-linked morning clustering but splits credit
 between K_s and K_o (its documented short-kernel/leakage bias) and loses to
 Poisson OOS — MLE is clearly the right estimator for this model too.
 
+**Daily re-estimation (fig10)**: the walk-forward was upgraded from 30-day to
+**daily refits** (warm-started, 221 out-of-sample days after the 30-day
+burn-in). Every day the model is re-estimated on all data before that day's
+open; at the open — when the gap is known — it issues P(extreme fall today)
+and P(extreme run today), and is scored on the day's realized events.
+Cumulative out-of-sample log-score vs Poisson: **overnight-MLE +16.2**
+(accumulating steadily through the year), self-only ETAS +0.0 (it *is*
+Poisson daily, K_s≈0), overnight KAN-PIN −17.6. The daily-readjusted K_o
+stays in ~0.20–0.41 all year. Daily directional gauge = E[extreme runs] −
+E[extreme falls] per day: it briefly tilted negative in Oct 2025 and
+positive in early 2026, and sits at ≈ −0.02 events/day at the end of the
+sample — **the model is a volatility-timing tool with essentially no
+directional edge**; big gaps raise both tails almost symmetrically.
+
 **Ready for the 11-year 1-minute SPY data**: `split_overnight_intraday`
 groups by calendar day and works at any bar frequency, and thresholds are
 quantile-based. One change is required first: at ~53k events the O(N²)
@@ -382,10 +396,11 @@ does not).
 | `etas.py` | the paper's method: events, ETAS intensity/likelihood/MLE, diagnostics, simulation, EWS, episode-duration forecasts, bivariate cross-excitation; self-explaining docstrings + `explain()` |
 | `kan_pin.py` | Jacobi-KAN + Fourier features + integral-form physics + MDMM curriculum estimator |
 | `stability.py` | Nyblom/Hansen parameter-stability test (per-event scores) + walk-forward validation engine running both estimators |
-| `overnight.py` | separated overnight/intraday returns; overnight-gap-trigger ETAS (MLE + LR test + Nyblom) and KAN-PIN variant; 30-day walk-forward |
+| `overnight.py` | separated overnight/intraday returns; overnight-gap-trigger ETAS (MLE + LR test + Nyblom) and KAN-PIN variant; 30-day and daily walk-forward engines |
+| `run_daily_walkforward.py` | daily re-estimation walk-forward (warm-started), fig10, directional conclusion |
 | `run_analysis.py` | end-to-end pipeline: all figures, tables, results.json (`python3 run_analysis.py`) |
 | `Financial_Earthquakes_Hawkes.ipynb` | executed notebook walking through everything |
-| `figures/` | fig1 events, fig2 intensity indicator, fig3 EWS, fig4 duration forecasts, fig5 KAN-PIN, fig6 stability/Nyblom, fig7 walk-forward OOS, fig8 overnight triggers, fig9 overnight walk-forward |
+| `figures/` | fig1 events, fig2 intensity indicator, fig3 EWS, fig4 duration forecasts, fig5 KAN-PIN, fig6 stability/Nyblom, fig7 walk-forward OOS, fig8 overnight triggers, fig9 overnight walk-forward, fig10 daily walk-forward + direction |
 | `AA_h.csv` | the hourly input data (daily series is aggregated from it) |
 | `results.json` | key numbers from the last run |
 
