@@ -510,6 +510,49 @@ The per-method detection sweep (`scripts/method_detection_sweep.py`,
 `results/fig_method_sweep_spy.png`) tests each algorithm's independent
 multi-bubble detection over SPY 1998–2010.
 
+# HLPPL indicators + ALCOA live analysis (2026-07-10)
+
+`deep_lppls/hlppl.py` implements the **Hyped LPPL model** (Cao, Shao, Yan,
+Geman, arXiv:2510.10878; parameters aligned with the chirindaopensource
+reference pipeline): rolling 7-parameter bounded TRF calibration (10
+multistart seeds, t_c ∈ (W+5, W+250), ω ∈ (2,20)), volatility-confined
+AR(1) residual check, causal residual normalisation (Eq. 8), BubbleScore
+(Eq. 14), episode labelling (|score| > 0.8 sustained ≥ 10 days) and the
+paper's trading rules (entry ±0.7, exit ±0.3, reversal exit) driven by
+multi-horizon score forecasts. **HLPPL-KAN** [extension] replaces the TRF
+trajectory with the M-LNN-KAN fitted on DAE-cleaned windows (declining
+windows are mirrored before cleaning). **P-LNN is removed from the live
+model set** (kept only for the paper-replication benchmarks).
+
+Disclosed live-system caveats: (1) no news corpus is available here, so the
+Hype index is proxied by abnormal-volume percentile and Sentiment = 0;
+(2) the paper's dual-stream transformer cannot be trained on one
+stock-year — the decision layer uses the paper's exact threshold rules on
+walk-forward ridge forecasts of the score (val correlation 0.78/0.63/0.49/
+0.32/0.48 at h = 1..5); (3) the DAE reshapes crash windows noticeably even
+with mirroring (trained on rising shapes).
+
+![Alcoa HLPPL](results/fig_alcoa_hlppl.png)
+![Alcoa densities](results/fig_alcoa_live_densities.png)
+![Alcoa decision](results/fig_alcoa_ml_decision.png)
+
+**Findings on Alcoa (data 2025-07-11 → 2026-07-10):** the year contains a
++180% run-up into the 2026-06-02 peak (83.79) followed by a −42% crash to
+48.68. Residuals pass the volatility-confined check (AR(1) α = 0.23 > 0).
+HLPPL-KAN labels one episode: a **negative bubble 2026-06-23 → 2026-07-08**
+(intensity 1.15) — the crash — whose score has now mean-reverted to −0.39
+(TRF engine: −0.14). Long-entry conditions (score ≤ −0.7) fired throughout
+the crash (TRF: through 06-25; KAN: 06-23 → 07-09). At the live date the
+t_c densities of MONO, MONO-KAN, MONO-DAE and HLPPL-KAN all put the
+critical time within ±3 weeks of now (medians −15…0 days — the negative
+bubble has essentially completed; realised low 47.48 on 07-01); the
+TRF-engine ensemble is the outlier (80% negative fits, median t_c +116
+days, floor ≈ 17 — the unconstrained 7-param fit extrapolates the crash far
+out and should be read with caution). **ML decision (paper rules): STAY
+FLAT** — 5-day score forecasts (+0.21, +0.10, −0.07, −0.05, −0.12) sit well
+inside the ±0.7 entry band, and their sign flip across horizons triggers
+the reversal-exit condition for any held position.
+
 # Conclusions
 
 **On TASI, the paper's approach wins the forecasting task.** Standing 2–7
