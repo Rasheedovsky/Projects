@@ -93,6 +93,55 @@ and elevated psi at the *compressed* end — the "artificially suppressed
 volatility" regime of the framework document, opposite in nature to a crash
 but flagged by the same statistic.
 
+## Full 2008–2021 run: psi + number of classes (mixture extension)
+
+`detect_flashcrashes.py` runs `rolling_panel()` over the full dataset
+(1,301,308 bars → 1,000,078 sliding 90-minute windows, step 1 minute, ~299
+per day). For every window it reports, besides psi:
+
+- **`n_classes`** — the BIC-optimal number of lognormal mixture components
+  (1–3) fitted by vectorized EM to the window's **log-standardized** incomes
+  ((ln x − μ)/σ, so the count is fully scale- and dispersion-free): the
+  number of "classes of society" trading in that window.
+- **`sigma`** — the window's log-income dispersion, used to split alert
+  episodes into **dispersed** (crash/panic) vs **compressed** (pinned,
+  artificially suppressed volatility) regimes.
+
+Alert windows (z ≥ 3 on a 5-day trailing baseline) cluster into 1,337
+intraday episodes: 204 dispersed, ~15/year compressed, rest mixed.
+
+Key findings (gross-return incomes):
+
+- **Class splitting is the crash signature**: 68% of alert windows have
+  ≥ 2 classes vs 8.6% of calm windows; every top-30 dispersed episode has
+  100% multi-class alert windows. Overall, 87.6% of all windows are
+  single-class (fair), 11.9% two-class, 0.5% three-class.
+- **The #1 episode of 14 years is the AP-Twitter-hack flash crash**
+  (2013-04-23 13:10, z = 20.7) — on a mere 1% price dip. The 2010 flash
+  crash (z = 13.6), Volmageddon (2018-02-05 15:12, z = 12.3), the failed
+  TARP vote (2008-09-29), and COVID circuit-breaker #2 (2020-03-12) all
+  make the dispersed list.
+- **20 of the top 30 dispersed episodes peak in the 13:55–14:20 ET Fed
+  slot** (24% of all dispersed episodes vs ~6% expected by chance) — FOMC
+  statement reactions: QE1 expansion (2009-03-18), QE2 (2010-11-03),
+  no-taper (2013-09-18), liftoff (2015-12-16), "autopilot" (2018-12-19)…
+  The detector is effectively an information-event seismograph.
+- **Known misses, both structural**: (1) *opening crashes* (2015-08-24
+  ETF crash, 2014-10-15, COVID limit-down opens) — the first window of a
+  day completes at 11:00, and by then the crash is blended with its own
+  rebound (2015-08-24 is caught only late, z = 3.1 at 15:40); (2)
+  *baseline saturation* — in sustained chaos (mid-March 2020, September
+  2008) the trailing baseline itself explodes, so nothing is anomalous
+  *relative to its own week*. The z-score detects transitions into
+  dislocation, not steady-state chaos.
+- Compressed episodes are dominated by half-day/holiday sessions
+  (Christmas Eve 2020, post-Thanksgiving Fridays) and pre-FOMC pauses —
+  the "suppressed volatility" end of the framework's table.
+
+Outputs in `results_full/`: `episodes_gross_return.csv` (all 1,337
+episodes), `panel_gross_return.csv.gz` (full per-window psi / n_classes /
+sigma / z panel), `timeline_2008_2021.png`, `flashcrash_zooms.png`.
+
 ### Population counts
 
 - Rolling mode: ~330 populations/day of 60 minute-incomes; 83,279 windows
