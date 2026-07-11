@@ -28,12 +28,10 @@ import matplotlib.pyplot as plt
 
 from psi_signal import income_series, load_minute_bars, rolling_panel, trailing_zscore
 
-WINDOW = 90
 STEP = 1
 ALERT_Z = 3.0
 GAP_TOL = pd.Timedelta(minutes=5)
 BASELINE_DAYS = 5
-PER_DAY = 390 - WINDOW + 1          # sliding windows per full day
 
 KNOWN_EVENTS = {
     "2008-09-15": "Lehman Brothers bankruptcy",
@@ -130,22 +128,24 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("csv")
     ap.add_argument("--measure", default="gross_return")
+    ap.add_argument("--window", type=int, default=90)
     ap.add_argument("--outdir", default="results_full")
     args = ap.parse_args()
+    per_day = 390 - args.window + 1
     os.makedirs(args.outdir, exist_ok=True)
 
     bars = load_minute_bars(args.csv)
     print(f"Loaded {len(bars):,} bars: {bars.index[0].date()} .. {bars.index[-1].date()}")
 
     income = income_series(bars, args.measure)
-    panel = rolling_panel(income, window=WINDOW, step=STEP)
+    panel = rolling_panel(income, window=args.window, step=STEP)
     print(f"panel: {len(panel):,} windows "
           f"({len(panel) / panel.index.normalize().nunique():.0f}/day)")
 
-    panel["z"] = trailing_zscore(panel["psi"], baseline=BASELINE_DAYS * PER_DAY,
-                                 min_periods=2 * PER_DAY)
+    panel["z"] = trailing_zscore(panel["psi"], baseline=BASELINE_DAYS * per_day,
+                                 min_periods=2 * per_day)
     panel["sigma_med"] = (panel["sigma"].shift(1)
-                          .rolling(BASELINE_DAYS * PER_DAY, min_periods=2 * PER_DAY)
+                          .rolling(BASELINE_DAYS * per_day, min_periods=2 * per_day)
                           .median())
     panel.to_csv(os.path.join(args.outdir, f"panel_{args.measure}.csv.gz"),
                  compression="gzip")
