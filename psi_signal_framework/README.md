@@ -14,9 +14,14 @@ the 60 one-minute bars — where each minute's "income" is:
 
 | measure | income of minute *i* | interpretation |
 |---|---|---|
-| `dollar_volume` | close_i × volume_i | equity-wise (price–volume) income |
+| `gross_return` | close_i / close_{i−1} | fair-game test: lognormal fit of gross returns = normality of minute returns |
+| `dollar_volume` | vwap_i × volume_i | equity-wise (price–volume) income |
+| `volume` | volume_i | share-volume income |
 | `price` | close_i | price-only |
-| `abs_return` | \|log return_i\| | volatility shape (optional) |
+| `abs_return` | \|log return_i\| | volatility shape |
+
+Returns are differenced **within each day** so the first bar never carries the
+overnight gap (otherwise every opening window on a gap day is a false alarm).
 
 For every window we fit the ideal lognormal from the window's **own**
 log-moments (mu, sigma of ln x), and compute
@@ -51,14 +56,49 @@ detection latency), and **hourly** non-overlapping clock hours (the literal
   injected May-6-style crash (-9% in 13 min, 20–40× volume, partial rebound).
 - `synthetic_flashcrash_result.png` — validation output.
 
-## Validation result (synthetic crash)
+## Results on real SPY data (2010, Kaggle `spy_1min_2008_2021_cleaned`)
 
-- `dollar_volume` incomes: alert (|z| ≥ 2) at the **first minute** of the
-  plunge, peak |z| ≈ 13.
-- `price` incomes: alert 5 minutes in, peak |z| ≈ 8.
-- Hourly mode: the crash hour scores z ≈ 3.1 vs its trailing baseline.
-- False-alarm rate on calm days ≈ 3% of windows (a 2-sigma rule under a
-  normal null allows 4.6%).
+Data: `data/spy_1min_2010.csv` (98,147 RTH bars, 252 days; feed timestamps
+are auto-shifted +2h to US/Eastern by the loader). Rolling 60-minute
+windows stepping 1 minute, 12 bins, 5-day trailing baseline.
+
+**The May 6 flash crash is the #1 dislocation of 2010 under the
+`gross_return` measure**: 8 of the year's 10 highest-|z| windows are crash
+minutes, peak z = 10.7 at 14:47 ET, first alert 14:44 (the cleaned-data
+price bottom), sustained |z| ≥ 2 for 27 consecutive windows. A warning
+blip (z = 2.6) appears at ~12:35, two hours before the crash. The two
+non-crash windows in the top 10 are genuine information events: 14:17 on
+2010-08-10 (two minutes after the FOMC "QE-lite" statement) and 12:41 on
+2010-05-28 (Fitch's midday downgrade of Spain).
+
+Other measures on the real crash: `dollar_volume` peaks at z = 2.0 exactly
+at 14:44; `price` never alerts (peak z = 1.1); the literal non-overlapping
+clock-hour mode scores z = −0.5 for the 14:00–15:00 hour.
+
+Two lessons the synthetic validation (peak z ≈ 13 on injected crash,
+`synthetic_flashcrash_result.png`) did not show:
+
+1. **psi is scale-invariant, and real panics are broad.** The crash raised
+   volume in nearly every minute proportionally, so the hour's dollar-volume
+   *shape* stayed close to lognormal — "fair" — while the return distribution
+   became wildly non-normal. Shape-based fairness detection wants returns.
+2. **Window alignment matters.** The clock hour 14:00–15:00 blends plunge
+   and rebound into one symmetric fat population that looks almost fair;
+   rolling windows that mix calm minutes with the first crash minutes are
+   maximally bimodal and light up. Populations must roll, not snap to hours.
+
+Known behavior: in very quiet periods many minute returns are exactly 0
+(price pinned at a penny tick), producing a point mass in the distribution
+and elevated psi at the *compressed* end — the "artificially suppressed
+volatility" regime of the framework document, opposite in nature to a crash
+but flagged by the same statistic.
+
+### Population counts
+
+- Rolling mode: ~330 populations/day of 60 minute-incomes; 83,279 windows
+  in 2010; ≈ 1.11 M across the full 2008–2021 file (3,347 trading days).
+- Hourly mode: 7 populations/day, ~55.7 members each on average; 1,761 in
+  2010; ≈ 23,400 across the full file.
 
 ## Running on real data
 

@@ -28,7 +28,7 @@ import matplotlib.pyplot as plt
 
 from psi_signal import analyze, load_minute_bars
 
-MEASURES = ("dollar_volume", "price")
+MEASURES = ("gross_return", "dollar_volume", "price")
 FLASH_CRASH_DAY = pd.Timestamp("2010-05-06")
 
 
@@ -103,7 +103,8 @@ def plot_day(bars, results, hourly, day, path):
     axes[0].plot(bars.loc[sel].index, bars.loc[sel, "close"], lw=0.9)
     axes[0].set_title(f"{day.date()} — close price")
 
-    for m, color in (("dollar_volume", "#d62728"), ("price", "#2ca02c")):
+    for m, color in (("gross_return", "#1f77b4"), ("dollar_volume", "#d62728"),
+                     ("price", "#2ca02c")):
         z = results[m]["z"].loc[sel]
         axes[1].plot(z.index, z, lw=1.0, color=color, label=m)
     axes[1].axhline(2, color="red", ls="--", lw=0.8)
@@ -121,6 +122,16 @@ def plot_day(bars, results, hourly, day, path):
     plt.close(fig)
 
 
+def max_alert_run(z: pd.Series) -> int:
+    """Longest streak of consecutive windows with |z| >= 2."""
+    hit = (z.abs() >= 2).astype(int)
+    best = run = 0
+    for h in hit:
+        run = run + 1 if h else 0
+        best = max(best, run)
+    return best
+
+
 def report_flash_crash(results, hourly):
     start = FLASH_CRASH_DAY + pd.Timedelta("14h30min")
     end = FLASH_CRASH_DAY + pd.Timedelta("15h30min")
@@ -130,6 +141,17 @@ def report_flash_crash(results, hourly):
         if len(win):
             print(f"[{m}] peak |z| 14:30-15:30: {win.abs().max():.1f}  "
                   f"first |z|>=2: {next(iter(win[win.abs() >= 2].index), 'none')}")
+    # sustained dislocation: longest alert streak on the crash day vs any other day
+    for m, res in results.items():
+        z = res["z"].dropna()
+        days = z.groupby(z.index.normalize())
+        runs = days.apply(max_alert_run).sort_values(ascending=False)
+        crash_run = runs.get(FLASH_CRASH_DAY, 0)
+        rank = int((runs > crash_run).sum()) + 1
+        print(f"[{m}] longest |z|>=2 streak on crash day: {crash_run} consecutive "
+              f"windows (rank {rank} of {len(runs)} days; next-best day: "
+              f"{runs.index[0].date() if runs.index[0] != FLASH_CRASH_DAY else runs.index[1].date()} "
+              f"with {runs.iloc[0] if runs.index[0] != FLASH_CRASH_DAY else runs.iloc[1]})")
     ch = hourly.loc[hourly.index == FLASH_CRASH_DAY + pd.Timedelta("14h"), "z"]
     if len(ch):
         print(f"[hourly dollar-volume] z of the 14:00-15:00 hour: {float(ch.iloc[0]):.1f}")

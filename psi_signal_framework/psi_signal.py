@@ -30,16 +30,25 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-VALID_MEASURES = ("price", "dollar_volume", "abs_return")
+VALID_MEASURES = ("price", "dollar_volume", "volume", "gross_return", "abs_return")
 
 
 # ---------------------------------------------------------------------------
 # Core psi computation
 # ---------------------------------------------------------------------------
 
-def psi_score(x, bins: int = 12, min_obs: int = 20) -> float:
+def psi_score(x, bins: int = 12, min_obs: int = 20,
+              standardize: bool = True) -> float:
     """KL divergence between the empirical distribution of a positive sample
     and the maximum-entropy lognormal fitted from the sample's log-moments.
+
+    With standardize=True each income is divided by the window mean, so every
+    window is expressed in the same units: share of the window's average
+    income, as in the Venkatasubramanian income-fairness papers.  psi itself
+    is exactly invariant to this rescaling (dividing by the mean shifts every
+    log by a constant, which the fitted mu and the data-driven bin edges
+    absorb), so it changes nothing about the signal — it is kept on by
+    default for cross-window consistency and numerical stability.
 
     Binning is done in log space, so this equals the binned KL between the
     empirical distribution of x and the fitted lognormal with matched bins.
@@ -51,6 +60,8 @@ def psi_score(x, bins: int = 12, min_obs: int = 20) -> float:
     n = x.size
     if n < min_obs:
         return np.nan
+    if standardize:
+        x = x / x.mean()
 
     lx = np.log(x)
     mu = lx.mean()
@@ -84,9 +95,22 @@ def income_series(bars: pd.DataFrame, measure: str) -> pd.Series:
     if measure == "price":
         return bars["close"].astype(float)
     if measure == "dollar_volume":
-        return (bars["close"] * bars["volume"]).astype(float)
+        # per-minute VWAP (if the feed provides it) is the true average price
+        # paid during the minute; fall back to close otherwise
+        px = bars["vwap"] if "vwap" in bars.columns else bars["close"]
+        return (px * bars["volume"]).astype(float)
+    if measure == "volume":
+        return bars["volume"].astype(float)
+    close = bars["close"].astype(float)
+    day = close.index.normalize()
+    if measure == "gross_return":
+        # P_t / P_{t-1} > 0: fitting a lognormal to gross returns is exactly
+        # fitting a normal to log returns, so psi tests the *normality* of the
+        # window's minute returns — the fair-game benchmark.  Differenced
+        # within each day so the first bar never carries the overnight gap.
+        return close.groupby(day).pct_change() + 1.0
     # abs_return: zeros are dropped inside psi_score (x > 0 filter)
-    return np.log(bars["close"].astype(float)).diff().abs()
+    return np.log(close).groupby(day).diff().abs()
 
 
 # ---------------------------------------------------------------------------
@@ -94,7 +118,8 @@ def income_series(bars: pd.DataFrame, measure: str) -> pd.Series:
 # ---------------------------------------------------------------------------
 
 def rolling_psi(income: pd.Series, window: int = 60, step: int = 1,
-                bins: int = 12, min_obs: int = 30) -> pd.Series:
+                bins: int = 12, min_obs: int = 30,
+                standardize: bool = True) -> pd.Series:
     """Psi for each rolling window of `window` bars, stamped at the window end.
 
     Windows never span session breaks: bars must already be restricted to
@@ -110,14 +135,17 @@ def rolling_psi(income: pd.Series, window: int = 60, step: int = 1,
         if times[end - 1] - times[start] > max_span:
             continue  # window straddles an overnight/weekend gap
         out_idx.append(times[end - 1])
-        out_val.append(psi_score(values[start:end], bins=bins, min_obs=min_obs))
+        out_val.append(psi_score(values[start:end], bins=bins, min_obs=min_obs,
+                                 standardize=standardize))
     return pd.Series(out_val, index=pd.DatetimeIndex(out_idx), name="psi")
 
 
-def hourly_psi(income: pd.Series, bins: int = 12, min_obs: int = 30) -> pd.Series:
+def hourly_psi(income: pd.Series, bins: int = 12, min_obs: int = 30,
+               standardize: bool = True) -> pd.Series:
     """Psi for each clock hour: the hour as one population of ~60 minute-incomes."""
     grouped = income.groupby(income.index.floor("h"))
-    out = grouped.apply(lambda g: psi_score(g.to_numpy(), bins=bins, min_obs=min_obs))
+    out = grouped.apply(lambda g: psi_score(g.to_numpy(), bins=bins, min_obs=min_obs,
+                                            standardize=standardize))
     out.name = "psi"
     return out
 
@@ -155,7 +183,7 @@ def classify(z: pd.Series, warn: float = 1.0, alert: float = 2.0) -> pd.Series:
 
 def analyze(bars: pd.DataFrame, measure: str, window: int = 60, step: int = 1,
             bins: int = 12, baseline: int = 1950, min_periods: int = 390,
-            mode: str = "rolling") -> pd.DataFrame:
+            mode: str = "rolling", standardize: bool = True) -> pd.DataFrame:
     """End-to-end: bars -> income -> psi -> z -> signal.
 
     baseline=1950 rolling windows = ~5 trading days of 390 one-minute bars.
@@ -164,9 +192,10 @@ def analyze(bars: pd.DataFrame, measure: str, window: int = 60, step: int = 1,
     """
     income = income_series(bars, measure)
     if mode == "rolling":
-        psi = rolling_psi(income, window=window, step=step, bins=bins)
+        psi = rolling_psi(income, window=window, step=step, bins=bins,
+                          standardize=standardize)
     elif mode == "hourly":
-        psi = hourly_psi(income, bins=bins)
+        psi = hourly_psi(income, bins=bins, standardize=standardize)
     else:
         raise ValueError("mode must be 'rolling' or 'hourly'")
     z = trailing_zscore(psi, baseline=baseline, min_periods=min_periods)
@@ -200,7 +229,8 @@ def load_minute_bars(path: str, tz: str | None = None) -> pd.DataFrame:
     else:
         raise ValueError(f"No timestamp column found. Columns: {list(df.columns)}")
 
-    rename = {"vol": "volume", "adj_close": "close", "last": "close", "price": "close"}
+    rename = {"vol": "volume", "adj_close": "close", "last": "close",
+              "price": "close", "average": "vwap"}
     df = df.rename(columns={k: v for k, v in rename.items() if k in df.columns
                             and v not in df.columns})
     missing = [c for c in ("close", "volume") if c not in df.columns]
@@ -212,5 +242,17 @@ def load_minute_bars(path: str, tz: str | None = None) -> pd.DataFrame:
         df.index = df.index.tz_localize(tz)
     df = df.sort_index()
     df = df[~df.index.duplicated(keep="first")]
+
+    # Auto-align the session clock to US/Eastern: some feeds stamp bars in the
+    # collecting machine's timezone.  If the modal session start is a whole
+    # number of hours away from 09:30, shift accordingly.
+    starts = df.groupby(df.index.normalize()).apply(lambda g: g.index.min().time())
+    modal = starts.mode().iloc[0]
+    offset_min = (9 * 60 + 30) - (modal.hour * 60 + modal.minute)
+    if offset_min != 0 and offset_min % 60 == 0 and abs(offset_min) <= 4 * 60:
+        df.index = df.index + pd.Timedelta(minutes=offset_min)
+        print(f"note: session start detected at {modal}; timestamps shifted "
+              f"{offset_min / 60:+.0f}h to US/Eastern")
+
     df = df.between_time("09:30", "16:00")
     return df
