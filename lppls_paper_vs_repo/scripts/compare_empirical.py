@@ -37,7 +37,7 @@ from scipy.stats import gaussian_kde
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from deep_lppls import kan, lm, mlnn, plnn
+from deep_lppls import kan, lm, mlnn, plnn, ssa
 from deep_lppls.core import design_matrix, minmax_scale, solve_linear
 from lppls.lppls import LPPLS
 
@@ -134,10 +134,15 @@ def fit_all_methods(x_scaled, scale, plnn_models, seed):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", choices=list(DATASETS), default="tasi")
+    ap.add_argument("--ssa", action="store_true",
+                    help="SSA-clean each window's log-price before fitting; "
+                         "outputs get an _ssa suffix")
     args = ap.parse_args()
-    key = args.data
+    key = args.data + ("_ssa" if args.ssa else "")
 
-    df, peak_idx, label = load_data(key)
+    df, peak_idx, label = load_data(args.data)
+    if args.ssa:
+        label += " (SSA-cleaned)"
     peak_date = df.loc[peak_idx, "Date"]
     after = df.iloc[peak_idx : peak_idx + 130]  # ~6 months
     trough_idx = int(after["Close"].idxmin())
@@ -162,6 +167,8 @@ def main():
                 continue
             win = df["logp"].iloc[t1_idx : t2_idx + 1].values
             x_res = resample_window(win)
+            if args.ssa:
+                x_res = ssa.ssa_clean(x_res)
             x_scaled, scale = minmax_scale(x_res)
             res = fit_all_methods(x_scaled, scale, plnn_models, seed=t2_off * 1000 + L)
             peak_price = float(df.loc[peak_idx, "Close"])
@@ -203,7 +210,7 @@ def main():
     summ.to_csv(ROOT / "results" / f"{key}_summary.csv")
     print(summ.to_string(), flush=True)
 
-    plot(df, est, peak_idx, trough_idx, key, label)
+    plot(df, est, peak_idx, trough_idx, key, label, clean=args.ssa)
     print("figure saved", flush=True)
 
 
@@ -216,7 +223,7 @@ def idx_to_date(df, fidx):
     return df.loc[lo, "Date"] + (df.loc[hi, "Date"] - df.loc[lo, "Date"]) * frac
 
 
-def plot(df, est, peak_idx, trough_idx, key, label):
+def plot(df, est, peak_idx, trough_idx, key, label, clean=False):
     """Paper Fig. 4 analogue: tc PDFs strip on top, log-price + fits below."""
     fig, (ax_pdf, ax) = plt.subplots(
         2, 1, figsize=(14, 8.5), sharex=True,
@@ -233,6 +240,8 @@ def plot(df, est, peak_idx, trough_idx, key, label):
     t1_idx = t2_idx - L + 1
     win = df["logp"].iloc[t1_idx : t2_idx + 1].values
     x_res = resample_window(win)
+    if clean:
+        x_res = ssa.ssa_clean(x_res)
     x_scaled, (mn, rng) = minmax_scale(x_res)
     ax.axvspan(df.loc[t1_idx, "Date"], df.loc[t2_idx, "Date"], color="grey", alpha=0.15, label="calibration window")
     ax.axvline(df.loc[t1_idx, "Date"], color="green", ls="-.", lw=1.2, label="$t_1$")
