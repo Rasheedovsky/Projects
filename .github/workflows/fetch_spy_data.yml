@@ -2,6 +2,9 @@ name: Fetch SPY 1-min dataset from Kaggle
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - claude/spy-informed-trading-detection-n96080
 
 permissions:
   contents: write
@@ -12,17 +15,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Skip if data already present
+        id: guard
+        run: |
+          if [ -f data/spy_1min_2010.csv ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/setup-python@v5
+        if: steps.guard.outputs.skip == 'false'
         with:
           python-version: "3.11"
 
       - name: Install dependencies
+        if: steps.guard.outputs.skip == 'false'
         run: pip install --quiet kagglehub pandas
 
       - name: Download and stage dataset
+        if: steps.guard.outputs.skip == 'false'
         run: python psi_signal_framework/fetch_kaggle_data.py
 
       - name: Commit data to this branch
+        if: steps.guard.outputs.skip == 'false'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
