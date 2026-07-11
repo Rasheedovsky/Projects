@@ -47,19 +47,27 @@ LIVE_WINDOWS = [60, 90, 126, 168, 210, 252, 294, 336, 378, 420]
 N = 252
 HORIZON_BARS = [7, 14, 21, 28, 35]  # 1..5 trading days
 
+OUT = "alcoa_hourly"
+SERIES_LABEL = "price"
 ENGINES = ["HLPPL", "HLPPL-DAE", "HLPPL-KAN", "HLPPL-DAE-KAN"]
 COLORS = {"HLPPL": "tab:blue", "HLPPL-DAE": "tab:green", "HLPPL-KAN": "tab:orange",
           "HLPPL-DAE-KAN": "tab:red", "MONO": "tab:purple", "MONO-KAN": "tab:cyan",
           "MONO-DAE": "tab:brown"}
 
 
-def load_hourly():
+def load_hourly(series="price"):
     df = pd.read_csv(ROOT / "data" / "AA_hourly.csv", skiprows=[1, 2])
     df = df.rename(columns={"Price": "Datetime"})
     df["Datetime"] = pd.to_datetime(df["Datetime"], utc=True).dt.tz_convert(None)
     df = df.sort_values("Datetime").reset_index(drop=True)
-    df["logp"] = np.log(df["Close"])
     df["hour"] = df["Datetime"].dt.hour
+    if series == "equity":
+        # equity = P x V with the intraday volume U-shape removed: each
+        # bar's volume is divided by the full-sample median volume of the
+        # same clock hour before forming the product
+        med = df.groupby("hour")["Volume"].transform("median")
+        df["Close"] = df["Close"] * (df["Volume"] / np.maximum(med, 1.0))
+    df["logp"] = np.log(df["Close"])
     return df
 
 
@@ -228,14 +236,21 @@ def ml_forecast(sc, df):
 
 
 def main():
-    df = load_hourly()
+    global OUT, SERIES_LABEL
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--series", choices=["price", "equity"], default="price")
+    args = ap.parse_args()
+    if args.series == "equity":
+        OUT, SERIES_LABEL = "alcoa_hourly_eq", "equity (PxV, deseasonalised)"
+    df = load_hourly(args.series)
     print(f"AA hourly {df.Datetime.iloc[0]} -> {df.Datetime.iloc[-1]} ({len(df)} bars), "
           f"last {df.Close.iloc[-1]:.2f}", flush=True)
     hype = hourly_hype(df)
 
     series = rolling_scores(df, hype)
     pd.concat([s.assign(engine=k) for k, s in series.items()]).to_csv(
-        ROOT / "results" / "alcoa_hourly_scores.csv", index=False)
+        ROOT / "results" / f"{OUT}_scores.csv", index=False)
 
     for eng, sc in series.items():
         month = sc[sc["idx"] >= len(df) - LAST_MONTH_BARS]
@@ -245,7 +260,7 @@ def main():
 
     print("live ensembles...", flush=True)
     ens = live_ensembles(df)
-    ens.to_csv(ROOT / "results" / "alcoa_hourly_ensemble.csv", index=False)
+    ens.to_csv(ROOT / "results" / f"{OUT}_ensemble.csv", index=False)
     print(ens.groupby("method").agg(n=("sign", "size"),
                                     neg_share=("sign", lambda s: float((s == "negative").mean())),
                                     med_tc_days=("tc_days", "median"),
@@ -254,7 +269,7 @@ def main():
     fc, val_corr = ml_forecast(series["HLPPL"], df)
     action, reason = hlppl.trading_decision(fc, position=0)
     pd.DataFrame(dict(h_days=[1, 2, 3, 4, 5], forecast=fc)).to_csv(
-        ROOT / "results" / "alcoa_hourly_forecast.csv", index=False)
+        ROOT / "results" / f"{OUT}_forecast.csv", index=False)
     print("day-horizon forecasts: " + " ".join(f"{v:+.2f}" for v in fc), flush=True)
     print("val corr: " + " ".join(f"{v:.2f}" for v in val_corr), flush=True)
     print(f"DECISION: {action} — {reason}", flush=True)
@@ -269,7 +284,7 @@ def plot(df, series, ens, fc, action, reason):
                                   gridspec_kw={"height_ratios": [2, 1.6], "hspace": 0.05})
     seg = df[df["Datetime"] >= ROLL_START_DATE]
     ax.plot(seg["Datetime"], seg["Close"], color="black", lw=0.8)
-    ax.set_ylabel("AA close (hourly)")
+    ax.set_ylabel(f"AA {SERIES_LABEL} (hourly)")
     ax.grid(alpha=0.25)
     month_start = df["Datetime"].iloc[len(df) - LAST_MONTH_BARS]
     ax.axvspan(month_start, df["Datetime"].iloc[-1], color="gold", alpha=0.10)
@@ -284,7 +299,7 @@ def plot(df, series, ens, fc, action, reason):
     ax2.legend(loc="lower left", fontsize=8, ncols=4)
     ax2.grid(alpha=0.25)
     ax2.xaxis.set_major_formatter(mdates.DateFormatter("%m-%d"))
-    fig.savefig(ROOT / "results" / "fig_alcoa_hourly_scores.png", dpi=140, bbox_inches="tight")
+    fig.savefig(ROOT / "results" / f"fig_{OUT}_scores.png", dpi=140, bbox_inches="tight")
 
     # --- densities figure ---
     fig = plt.figure(figsize=(13.5, 8))
@@ -323,12 +338,12 @@ def plot(df, series, ens, fc, action, reason):
     ax_t.set_title(f"ALCOA hourly live indicator @ {last_dt} — negative-fit share: " + " | ".join(conf), fontsize=8.5)
     ax_p.set_xticks([]); ax_p.set_xlabel("PDF(price$_c$)")
     plt.setp(ax_p.get_yticklabels(), visible=False); plt.setp(ax_t.get_xticklabels(), visible=False)
-    axm.set_ylabel("AA close")
+    axm.set_ylabel(f"AA {SERIES_LABEL}")
     handles = [plt.Line2D([], [], color=c, lw=2) for c in COLORS.values()]
     axm.legend(handles, COLORS.keys(), loc="upper right", fontsize=8)
     axm.grid(alpha=0.25)
     axm.xaxis.set_major_formatter(mdates.DateFormatter("%m-%d"))
-    fig.savefig(ROOT / "results" / "fig_alcoa_hourly_densities.png", dpi=140, bbox_inches="tight")
+    fig.savefig(ROOT / "results" / f"fig_{OUT}_densities.png", dpi=140, bbox_inches="tight")
 
     # --- decision figure ---
     fig, ax = plt.subplots(figsize=(11, 5.5))
@@ -351,7 +366,7 @@ def plot(df, series, ens, fc, action, reason):
     ax.set_title(f"ALCOA hourly — ML decision: {action}\n({reason})", fontsize=11)
     ax.legend(loc="lower left", fontsize=9)
     ax.grid(alpha=0.25)
-    fig.savefig(ROOT / "results" / "fig_alcoa_hourly_decision.png", dpi=140, bbox_inches="tight")
+    fig.savefig(ROOT / "results" / f"fig_{OUT}_decision.png", dpi=140, bbox_inches="tight")
 
 
 if __name__ == "__main__":

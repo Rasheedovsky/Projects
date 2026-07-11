@@ -42,11 +42,19 @@ COLORS = {"HLPPL": "tab:blue", "HLPPL-KAN": "tab:red", "MONO": "tab:orange",
           "MONO-KAN": "tab:cyan", "MONO-DAE": "tab:brown"}
 
 
-def load_alcoa():
+OUT = "alcoa"          # output-file prefix; becomes alcoa_eq in equity mode
+SERIES_LABEL = "price"
+
+
+def load_alcoa(series="price"):
     df = pd.read_csv(ROOT / "data" / "AA_1year.csv", skiprows=[1, 2])
     df = df.rename(columns={"Price": "Date"})
     df["Date"] = pd.to_datetime(df["Date"])
     df = df.sort_values("Date").reset_index(drop=True)
+    if series == "equity":
+        # analysed observable = dollar volume ("equity") E = P x V; the
+        # whole pipeline (fits, residuals, floors) then runs on ln(E)
+        df["Close"] = df["Close"] * df["Volume"]
     df["logp"] = np.log(df["Close"])
     return df
 
@@ -187,9 +195,17 @@ def ml_forecast(scores, df):
 
 
 def main():
-    df = load_alcoa()
-    print(f"ALCOA {df.Date.iloc[0].date()} -> {df.Date.iloc[-1].date()} ({len(df)} days), "
-          f"last close {df.Close.iloc[-1]:.2f}", flush=True)
+    global OUT, SERIES_LABEL
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--series", choices=["price", "equity"], default="price",
+                    help="equity = analyse ln(price x volume) instead of ln(price)")
+    args = ap.parse_args()
+    if args.series == "equity":
+        OUT, SERIES_LABEL = "alcoa_eq", "equity (PxV)"
+    df = load_alcoa(args.series)
+    print(f"ALCOA [{SERIES_LABEL}] {df.Date.iloc[0].date()} -> {df.Date.iloc[-1].date()} ({len(df)} days), "
+          f"last level {df.Close.iloc[-1]:.4g}", flush=True)
     peak_idx = int(df["Close"].idxmax())
     print(f"max close {df.Close.max():.2f} on {df.Date[peak_idx].date()} "
           f"({100 * (df.Close.iloc[-1] / df.Close.max() - 1):.1f}% below)", flush=True)
@@ -199,8 +215,8 @@ def main():
     sc_trf, fits_trf = rolling_scores(df, engine="trf")
     print("rolling HLPPL-KAN (DAE+KAN)...", flush=True)
     sc_kan, _ = rolling_scores(df, engine="kan")
-    sc_trf.to_csv(ROOT / "results" / "alcoa_scores.csv", index=False)
-    sc_kan.to_csv(ROOT / "results" / "alcoa_scores_kan.csv", index=False)
+    sc_trf.to_csv(ROOT / "results" / f"{OUT}_scores.csv", index=False)
+    sc_kan.to_csv(ROOT / "results" / f"{OUT}_scores_kan.csv", index=False)
 
     alpha = hlppl.ou_alpha(sc_trf["eps"].dropna().values)
     print(f"residual AR(1) mean-reversion alpha = {alpha:.3f} "
@@ -213,12 +229,12 @@ def main():
             e["engine"] = name
         eps_all += eps
         print(f"  {name}: {len(eps)} episodes", flush=True)
-    pd.DataFrame(eps_all).to_csv(ROOT / "results" / "alcoa_episodes.csv", index=False)
+    pd.DataFrame(eps_all).to_csv(ROOT / "results" / f"{OUT}_episodes.csv", index=False)
 
     # ---- live ensembles at the last date ----
     print("live ensembles...", flush=True)
     ens = live_ensembles(df)
-    ens.to_csv(ROOT / "results" / "alcoa_live_ensemble.csv", index=False)
+    ens.to_csv(ROOT / "results" / f"{OUT}_live_ensemble.csv", index=False)
     summ = ens.groupby("method").agg(
         n=("sign", "size"),
         neg_share=("sign", lambda s: float((s == "negative").mean())),
@@ -230,7 +246,7 @@ def main():
     # ---- ML decision layer ----
     fc, val_corr = ml_forecast(sc_trf, df)
     action, reason = hlppl.trading_decision(fc, position=0)
-    pd.DataFrame(dict(h=[1, 2, 3, 4, 5], forecast=fc)).to_csv(ROOT / "results" / "alcoa_ml_forecast.csv", index=False)
+    pd.DataFrame(dict(h=[1, 2, 3, 4, 5], forecast=fc)).to_csv(ROOT / "results" / f"{OUT}_ml_forecast.csv", index=False)
     print(f"score now {sc_trf.score.iloc[-1]:+.3f} | forecasts h1..5: "
           + " ".join(f"{v:+.2f}" for v in fc), flush=True)
     print(f"val corr by horizon: " + " ".join(f"{v:.2f}" for v in val_corr), flush=True)
@@ -257,7 +273,7 @@ def plot_scores(df, sc_trf, sc_kan, eps_all, fits_trf):
             continue
         color = "red" if e["type"] == "positive" else "green"
         ax.axvspan(e["start"], e["end"], color=color, alpha=0.15)
-    ax.set_ylabel("ln(AA close)")
+    ax.set_ylabel(f"ln(AA {SERIES_LABEL})")
     ax.legend(loc="upper left", fontsize=9)
     ax.grid(alpha=0.25)
     ax.set_title("ALCOA: HLPPL bubble detection (shaded: episodes |score|>0.8 for 10+ days; "
@@ -273,7 +289,7 @@ def plot_scores(df, sc_trf, sc_kan, eps_all, fits_trf):
     ax2.legend(loc="upper left", fontsize=9)
     ax2.grid(alpha=0.25)
     ax2.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
-    fig.savefig(ROOT / "results" / "fig_alcoa_hlppl.png", dpi=140, bbox_inches="tight")
+    fig.savefig(ROOT / "results" / f"fig_{OUT}_hlppl.png", dpi=140, bbox_inches="tight")
 
 
 def plot_densities(df, ens):
@@ -323,12 +339,12 @@ def plot_densities(df, ens):
     ax_p.set_xlabel("PDF(price$_c$)")
     plt.setp(ax_p.get_yticklabels(), visible=False)
     plt.setp(ax_t.get_xticklabels(), visible=False)
-    ax.set_ylabel("AA close")
+    ax.set_ylabel(f"AA {SERIES_LABEL}")
     handles = [plt.Line2D([], [], color=c, lw=2) for c in COLORS.values()]
     ax.legend(handles, COLORS.keys(), loc="upper left", fontsize=9)
     ax.grid(alpha=0.25)
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
-    fig.savefig(ROOT / "results" / "fig_alcoa_live_densities.png", dpi=140, bbox_inches="tight")
+    fig.savefig(ROOT / "results" / f"fig_{OUT}_live_densities.png", dpi=140, bbox_inches="tight")
 
 
 def plot_decision(sc, fc, action, reason):
@@ -347,7 +363,7 @@ def plot_decision(sc, fc, action, reason):
     ax.set_title(f"ALCOA — ML decision layer: {action}\n({reason})", fontsize=11)
     ax.legend(loc="lower left", fontsize=9)
     ax.grid(alpha=0.25)
-    fig.savefig(ROOT / "results" / "fig_alcoa_ml_decision.png", dpi=140, bbox_inches="tight")
+    fig.savefig(ROOT / "results" / f"fig_{OUT}_ml_decision.png", dpi=140, bbox_inches="tight")
 
 
 if __name__ == "__main__":
