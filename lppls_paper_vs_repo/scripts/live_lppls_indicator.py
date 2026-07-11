@@ -88,7 +88,9 @@ def fit_ensembles(df, t2_idx, plnn_params, heavy_stride=1):
     t_all = np.arange(len(df), dtype=float)
     logp = df["logp"].values
     model = LPPLS(observations=np.array([t_all, logp]))
-    out = {"NM": [], "LM": [], "M-LNN": [], "M-LNN-KAN": [], "P-LNN": []}
+    # P-LNN removed from the live model set (design decision 2026-07-11);
+    # deep_lppls/plnn.py is retained for the paper-replication benchmarks.
+    out = {"NM": [], "LM": [], "M-LNN": [], "M-LNN-KAN": []}
     t_norm = np.linspace(0.0, 1.0, N)
     for wi, L in enumerate(WINDOW_LENGTHS):
         t1_idx = t2_idx - L + 1
@@ -105,9 +107,6 @@ def fit_ensembles(df, t2_idx, plnn_params, heavy_stride=1):
         win = logp[t1_idx : t2_idx + 1]
         x = np.interp(t_norm, np.linspace(0, 1, len(win)), win)
         x_scaled, scale = minmax_scale(x)
-
-        tcn, mn_, wn = (float(v) for v in plnn.predict(plnn_params, x_scaled.astype(np.float32))[0])
-        out["P-LNN"].append(_norm_record(tcn, mn_, wn, x_scaled, scale, t2_idx, L))
 
         if wi % heavy_stride == 0:
             seed = t2_idx * 1000 + L
