@@ -420,6 +420,53 @@ the best configuration. Recommendation: skip SSA by default, consider it
 only as an optional companion to the KAN variant. Full tables:
 `results/{tasi,spy}_ssa_summary.csv`, figures `fig_{tasi,spy}_ssa_fits.png`.
 
+# Autoencoder cleaning (DAE): the cleaner that actually helps
+
+`deep_lppls/dae.py` trains a denoising autoencoder (252→128→64→128→252,
+endpoint-weighted MSE) on synthetic *(noisy → clean)* LPPLS pairs from the
+Table 1 generator — so unlike SSA it knows the LPPLS signal prior. Held-out
+synthetic: **8.8× noise reduction vs SSA's 2.4×, and ~3× better endpoint
+fidelity** (SSA's fatal flaw). Training cost: 21 s. Run with
+`compare_empirical.py --dae`.
+
+![DAE vs SSA](results/fig_dae_vs_ssa_example.png)
+
+**Median t_c (days vs realised peak) and price_c error — raw / SSA / DAE:**
+
+| Method | TASI t_c | SPY t_c | TASI price_c | SPY price_c |
+|---|---|---|---|---|
+| LM | −16.5 / −19.4 / **−15.6** | −21.9 / −21.3 / **−13.1** | −2.3 / −3.5 / −2.4% | −2.2 / −3.8 / −2.8% |
+| M-LNN | −12.2 / −16.9 / **−11.2** | −22.7 / −22.0 / **−18.8** | −3.0 / −4.1 / −3.1% | −1.5 / −2.0 / −2.9% |
+| M-LNN-KAN | −3.9 / −6.1 / **−3.7** | −25.8 / −21.6 / **−19.3** | +2.2 / −0.2 / +2.2% | −2.0 / −1.1 / −2.6% |
+| P-LNN-100K | **+0.9** / +5.2 / +5.6 | **−3.2** / −3.4 / −10.5 | +0.6 / −0.4 / +1.1% | −2.0 / +0.8 / −3.0% |
+| lppls-repo (NM) | +82.8 / +65.6 / **+22.5** | +57.3 / +59.2 / **+0.3** (IQR 162→28 d, 30/30 valid) | −6.7 / −4.2 / −5.8% | −1.1 / −6.0 / −1.6% |
+
+Findings:
+
+* **DAE cleaning helps every calibration that *fits* the series** — LM,
+  M-LNN and M-LNN-KAN all improve on both datasets (the KAN stays the best
+  per-series method: −3.7 d on TASI). The improvement is largest exactly
+  where SSA failed, because the endpoint-weighted, LPPLS-prior-aware
+  reconstruction preserves the window edge.
+* **It transforms the reference repo's Nelder-Mead** from the worst
+  estimator to a competitive one: on SPY its median t_c goes from +57 days
+  (IQR 162 d, failures) to **+0.3 days with a 28-day IQR and 30/30
+  convergence**; on TASI from +83 to +22 days. Noise was driving its random
+  search into degenerate basins; the cleaned series rescues it.
+* **Do not stack the DAE with P-LNN**: P-LNN was trained on noisy inputs,
+  and cleaned windows sit outside its training distribution (TASI +0.9 →
+  +5.6 d; SPY −3.2 → −10.5 d). Raw P-LNN remains the single best
+  configuration overall.
+* **price_c is insensitive to cleaning** (all variants stay within ~3% of
+  the realised peak; ~6% for NM on TASI) — further evidence the critical
+  price is the robust output of LPPLS calibration.
+
+Updated conclusion: the earlier "cleaning doesn't help" verdict was specific
+to SSA. A *signal-aware* cleaner is a genuine upgrade for the classical and
+mono-network calibrations — cheapest strong combo: **DAE + repo-NM**
+(~20 ms/fit all-in) — while the supervised P-LNN should keep eating raw
+prices. Full tables: `results/{tasi,spy}_dae_summary.csv`.
+
 # Ratings: which algorithm is best?
 
 All evidence combined — 500 synthetic scenarios, 60 real pre-peak windows
