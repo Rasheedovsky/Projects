@@ -553,6 +553,35 @@ FLAT** — 5-day score forecasts (+0.21, +0.10, −0.07, −0.05, −0.12) sit w
 inside the ±0.7 entry band, and their sign flip across horizons triggers
 the reversal-exit condition for any held position.
 
+# Equity series (P×V) vs price, and the live-indicator packages
+
+`--series equity` in both Alcoa pipelines analyses ln(price × volume)
+(hourly volume deseasonalised by clock hour) instead of ln(price). Result:
+**the equity observable degrades every layer of the system on this data** —
+sign consensus collapses (negative-fit share 40–80% vs 90–100% on price),
+t_c and critical-level dispersion widen drastically, zero sustained
+episodes are detected (volume surges offset price declines inside P×V, so
+the July capitulation that price-space flags at score ≤ −1.0 nearly
+disappears), and the score forecaster loses all predictive power
+(validation correlations ≈ 0 vs 0.4–0.8 on price). One genuine insight
+survives: the equity series peaks at the **volume climax** (daily equity
+peak 2026-03-04, three months before the June price top; equity scores
+spike > +1.1 during the July 1 crash bars) — P×V behaves as an
+attention/participation indicator, which empirically supports the HLPPL
+paper's design of fitting ln(price) and injecting volume through the
+separate Hype term. Recommendation: price as the fitted observable, volume
+in the hype channel; keep `--series equity` as a complementary
+participation lens.
+
+**Live-indicator packages** (`live_indicators/`): seven self-contained
+repos-in-waiting — hlppl / hlppl-dae / hlppl-kan / hlppl-dae-kan /
+mono-lppls / mono-kan / mono-dae — each with a CLI `indicator.py`
+(JSON state output, price or equity mode), its minimal engine subset and
+README; DAE variants train their cleaner on first run. This session's
+GitHub access is repo-scoped and cannot create new repositories, so
+`scripts/publish_indicators.sh` creates the seven individual repos in one
+command on any machine with `gh` authenticated.
+
 # Conclusions
 
 **On TASI, the paper's approach wins the forecasting task.** Standing 2–7
