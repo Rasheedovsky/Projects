@@ -62,19 +62,24 @@ def summarize(outdir: str, measure: str, bars: pd.DataFrame | None) -> dict:
     s["fomc_slot_share"] = ((pk >= pd.Timedelta("13:55:00"))
                             & (pk <= pd.Timedelta("14:20:00"))).mean()
 
-    # forward information content: median realized vol of the NEXT 30 minutes
+    # forward information: vol expansion = next-30-min vol / trailing-60-min
+    # vol (deseasonalizes the intraday U-shape), by signal state
     if bars is not None:
         r = np.log(bars["close"]).groupby(bars.index.normalize()).diff()
-        fwd = (r.iloc[::-1].rolling(30, min_periods=20).std().iloc[::-1]
-               .shift(-30)).reindex(scored.index)
-        ok = fwd.notna()
-        s["fwdvol_alert"] = fwd[ok & (z >= ALERT_Z)].median()
-        s["fwdvol_warn"] = fwd[ok & (z >= 1) & (z < ALERT_Z)].median()
-        s["fwdvol_calm"] = fwd[ok & (z.abs() < 1)].median()
-        s["fwdvol_ratio"] = s["fwdvol_alert"] / s["fwdvol_calm"]
-        # same conditioning on the class count alone
-        s["fwdvol_multi"] = fwd[ok & (scored["n_classes"] >= 2)].median()
-        s["fwdvol_single"] = fwd[ok & (scored["n_classes"] == 1)].median()
+        trail = r.rolling(60, min_periods=40).std()
+        fwd = r.iloc[::-1].rolling(30, min_periods=20).std().iloc[::-1].shift(-30)
+        expansion = (fwd / trail).reindex(scored.index)
+        dispr = scored["sigma"] / scored["sigma_med"]
+        groups = {
+            "exp_disp_alert": (z >= ALERT_Z) & (dispr >= 1.5),
+            "exp_comp_alert": (z >= ALERT_Z) & (dispr <= 0.67),
+            "exp_calm": z.abs() < 1,
+        }
+        for key, m in groups.items():
+            e = expansion[m & expansion.notna()]
+            s[key] = e.median()
+            s[f"{key}_Pup"] = (e > 1).mean()
+            s[f"{key}_n"] = len(e)
     return s
 
 
