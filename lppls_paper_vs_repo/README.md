@@ -384,6 +384,42 @@ date:
 To run it on live data, feed today's price history into `fit_ensembles` and
 re-render; per-refresh cost is ~1.5 s (NM ensemble) or ~50 ms (P-LNN-only).
 
+# Does SSA price cleaning help?
+
+`deep_lppls/ssa.py` adds Singular Spectrum Analysis denoising (trajectory
+matrix W = n/3, SVD, adaptive rank keeping singular values ≥ 2% of the
+largest, Hankel reconstruction) as an optional stage before calibration
+(`compare_empirical.py --ssa`; ~2 ms per window). Same 30 windows, same
+seeds, prices cleaned inside each window only (no look-ahead):
+
+![SSA example](results/fig_ssa_example.png)
+
+**Paired comparison, raw → SSA-cleaned** (median t_c days vs peak; median
+price_c error; valid fits):
+
+| Method | TASI t_c | TASI price_c | SPY t_c | SPY price_c | valid fits |
+|---|---|---|---|---|---|
+| LM | −16.5 → **−19.4** ▼ | −2.3% → −3.5% ▼ | −21.9 → −21.3 ≈ | −2.2% → −3.8% ▼ | 60 → 60 |
+| M-LNN | −12.2 → **−16.9** ▼ | −3.0% → −4.1% ▼ | −22.7 → −22.0 ≈ | −1.5% → −2.0% ≈ | 60 → 60 |
+| M-LNN-KAN | −3.9 → −6.1 ≈ | +2.2% → **−0.2%** ▲ | −25.8 → **−21.6** ▲ | −2.0% → **−1.1%** ▲ | 60 → 60 |
+| P-LNN-100K | +0.9 → +5.2 ▼ | +0.6% → −0.4% ≈ | −3.2 → −3.4 ≈ (IQR 25→16 ▲) | −2.0% → +0.8% ▲ | 60 → 60 |
+| lppls-repo (NM) | +83 → +66 (still broken) | −6.7% → −4.2% | +57 → +59, IQR 162→306 ▼ | −1.1% → −6.0% ▼ | 57 → **49** ▼ |
+
+**Verdict: SSA cleaning does not improve the results overall and does not
+change the conclusions.** The pattern matches the mechanism found on
+synthetic data: SSA cuts in-window noise ~2.5×, but distorts the *endpoints*
+of the window — and the data just before t₂ is precisely what pins the
+critical time. Hence the classical per-series calibrations (LM, M-LNN) get
+systematically *earlier/worse* t_c and worse price_c; the repo's NM loses 8
+more fits outright. The two exceptions: **M-LNN-KAN benefits modestly on
+both datasets** (its price_c error drops to −0.2%/−1.1%), and P-LNN keeps
+its accuracy with a usefully tighter spread on SPY — remarkable given it was
+trained on *noisy* synthetic series, so cleaned inputs are out of its
+training distribution. Ranking is unchanged; P-LNN on raw prices remains
+the best configuration. Recommendation: skip SSA by default, consider it
+only as an optional companion to the KAN variant. Full tables:
+`results/{tasi,spy}_ssa_summary.csv`, figures `fig_{tasi,spy}_ssa_fits.png`.
+
 # Ratings: which algorithm is best?
 
 All evidence combined — 500 synthetic scenarios, 60 real pre-peak windows
