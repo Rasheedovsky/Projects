@@ -37,7 +37,7 @@ from scipy.stats import gaussian_kde
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from deep_lppls import kan, lm, mlnn, plnn, ssa
+from deep_lppls import dae, kan, lm, mlnn, plnn, ssa
 from deep_lppls.core import design_matrix, minmax_scale, solve_linear
 from lppls.lppls import LPPLS
 
@@ -137,12 +137,21 @@ def main():
     ap.add_argument("--ssa", action="store_true",
                     help="SSA-clean each window's log-price before fitting; "
                          "outputs get an _ssa suffix")
+    ap.add_argument("--dae", action="store_true",
+                    help="denoising-autoencoder-clean each scaled window "
+                         "before fitting; outputs get a _dae suffix")
     args = ap.parse_args()
-    key = args.data + ("_ssa" if args.ssa else "")
+    if args.ssa and args.dae:
+        ap.error("--ssa and --dae are mutually exclusive")
+    key = args.data + ("_ssa" if args.ssa else "") + ("_dae" if args.dae else "")
 
     df, peak_idx, label = load_data(args.data)
     if args.ssa:
         label += " (SSA-cleaned)"
+    dae_params = None
+    if args.dae:
+        label += " (DAE-cleaned)"
+        dae_params = dae.load_params(ROOT / "models" / "DAE-cleaner.npz")
     peak_date = df.loc[peak_idx, "Date"]
     after = df.iloc[peak_idx : peak_idx + 130]  # ~6 months
     trough_idx = int(after["Close"].idxmin())
@@ -170,6 +179,8 @@ def main():
             if args.ssa:
                 x_res = ssa.ssa_clean(x_res)
             x_scaled, scale = minmax_scale(x_res)
+            if dae_params is not None:
+                x_scaled = dae.clean(dae_params, x_scaled).astype(np.float64)
             res = fit_all_methods(x_scaled, scale, plnn_models, seed=t2_off * 1000 + L)
             peak_price = float(df.loc[peak_idx, "Close"])
             for method, (r, dt) in res.items():
@@ -210,7 +221,7 @@ def main():
     summ.to_csv(ROOT / "results" / f"{key}_summary.csv")
     print(summ.to_string(), flush=True)
 
-    plot(df, est, peak_idx, trough_idx, key, label, clean=args.ssa)
+    plot(df, est, peak_idx, trough_idx, key, label, clean=args.ssa, dae_params=dae_params)
     print("figure saved", flush=True)
 
 
@@ -223,7 +234,7 @@ def idx_to_date(df, fidx):
     return df.loc[lo, "Date"] + (df.loc[hi, "Date"] - df.loc[lo, "Date"]) * frac
 
 
-def plot(df, est, peak_idx, trough_idx, key, label, clean=False):
+def plot(df, est, peak_idx, trough_idx, key, label, clean=False, dae_params=None):
     """Paper Fig. 4 analogue: tc PDFs strip on top, log-price + fits below."""
     fig, (ax_pdf, ax) = plt.subplots(
         2, 1, figsize=(14, 8.5), sharex=True,
@@ -243,6 +254,8 @@ def plot(df, est, peak_idx, trough_idx, key, label, clean=False):
     if clean:
         x_res = ssa.ssa_clean(x_res)
     x_scaled, (mn, rng) = minmax_scale(x_res)
+    if dae_params is not None:
+        x_scaled = dae.clean(dae_params, x_scaled).astype(np.float64)
     ax.axvspan(df.loc[t1_idx, "Date"], df.loc[t2_idx, "Date"], color="grey", alpha=0.15, label="calibration window")
     ax.axvline(df.loc[t1_idx, "Date"], color="green", ls="-.", lw=1.2, label="$t_1$")
     ax.axvline(df.loc[t2_idx, "Date"], color="red", ls="-.", lw=1.4, label="$t_2$ (present)")
