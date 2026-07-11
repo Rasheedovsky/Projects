@@ -151,6 +151,103 @@ def hourly_psi(income: pd.Series, bins: int = 12, min_obs: int = 30,
 
 
 # ---------------------------------------------------------------------------
+# Vectorized panel: psi + number of classes (lognormal mixture, BIC)
+# ---------------------------------------------------------------------------
+
+def _mixture_bic(Z: np.ndarray, k: int, iters: int = 60,
+                 var_floor: float = 0.01) -> np.ndarray:
+    """BIC of a k-component Gaussian mixture fitted to each row of Z by EM,
+    vectorized across rows.  Rows are standardized log-incomes (mean 0, sd 1),
+    so a Gaussian mixture on Z is a lognormal mixture on the raw incomes.
+    Free parameters: k means + k variances + (k-1) weights = 3k - 1.
+    """
+    W, n = Z.shape
+    if k == 1:
+        # MLE Gaussian on standardized data: mu=0, var=1, closed-form logL
+        ll = -0.5 * n * (np.log(2 * np.pi) + 1.0)
+        return np.full(W, -2 * ll + 2 * np.log(n))
+
+    qs = np.linspace(0.15, 0.85, k)
+    mu = np.quantile(Z, qs, axis=1).T                        # (W, k)
+    var = np.full((W, k), 0.5)
+    w = np.full((W, k), 1.0 / k)
+    X = Z[:, None, :]                                        # (W, 1, n)
+    logr = np.zeros((W, k, n))
+    for _ in range(iters):
+        logpdf = -0.5 * (np.log(2 * np.pi * var[:, :, None])
+                         + (X - mu[:, :, None]) ** 2 / var[:, :, None])
+        logr = np.log(w[:, :, None] + 1e-300) + logpdf       # (W, k, n)
+        m = logr.max(axis=1, keepdims=True)
+        r = np.exp(logr - m)
+        r /= r.sum(axis=1, keepdims=True)
+        nk = r.sum(axis=2) + 1e-10                           # (W, k)
+        mu = (r * X).sum(axis=2) / nk
+        var = np.maximum((r * (X - mu[:, :, None]) ** 2).sum(axis=2) / nk,
+                         var_floor)
+        w = nk / n
+    m = logr.max(axis=1, keepdims=True)
+    ll = (m.squeeze(1) + np.log(np.exp(logr - m).sum(axis=1))).sum(axis=1)
+    return -2 * ll + (3 * k - 1) * np.log(n)
+
+
+def _psi_rows(L: np.ndarray, mu: np.ndarray, sd: np.ndarray,
+              bins: int) -> np.ndarray:
+    """psi for each row of log-incomes L, vectorized (same math as psi_score)."""
+    W, n = L.shape
+    lo = L.min(axis=1)
+    hi = L.max(axis=1) + 1e-12
+    frac = np.linspace(0.0, 1.0, bins + 1)
+    edges = lo[:, None] + (hi - lo)[:, None] * frac[None, :]         # (W, B+1)
+    inbin = ((L[:, None, :] >= edges[:, :-1, None])
+             & (L[:, None, :] < edges[:, 1:, None]))                 # (W, B, n)
+    p = inbin.sum(axis=2) / n
+    p[:, -1] += (L >= edges[:, -1:]).sum(axis=1) / n                 # top edge
+    q = np.diff(stats.norm.cdf((edges - mu[:, None]) / sd[:, None]), axis=1)
+    q = np.maximum(q / q.sum(axis=1, keepdims=True), 1e-12)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        terms = np.where(p > 0, p * np.log(p / q), 0.0)
+    return terms.sum(axis=1)
+
+
+def rolling_panel(income: pd.Series, window: int = 90, step: int = 1,
+                  bins: int = 12, max_classes: int = 3) -> pd.DataFrame:
+    """For every sliding window: psi, BIC-optimal number of mixture classes,
+    and the dispersion (sd of log incomes).
+
+    Incomes are log-standardized per window — (ln x - mu) / sigma — before the
+    mixture fit, so n_classes depends only on the *shape* of the distribution
+    (psi is invariant to standardization by construction).  Windows never
+    cross a session boundary: each trading day is processed separately.
+    Invalid incomes (NaN or <= 0) are dropped before windowing.
+    """
+    from numpy.lib.stride_tricks import sliding_window_view
+
+    frames = []
+    for day, g in income.groupby(income.index.normalize()):
+        g = g[np.isfinite(g) & (g > 0)]
+        if len(g) < window:
+            continue
+        M = sliding_window_view(g.to_numpy(dtype=float), window)[::step]
+        ends = g.index[window - 1::step]
+        L = np.log(M)
+        mu = L.mean(axis=1)
+        sd = L.std(axis=1)
+        ok = sd > 1e-12
+
+        psi = np.zeros(len(M))
+        ncls = np.ones(len(M), dtype=int)
+        if ok.any():
+            psi[ok] = _psi_rows(L[ok], mu[ok], sd[ok], bins)
+            Z = (L[ok] - mu[ok, None]) / sd[ok, None]
+            bics = np.column_stack([_mixture_bic(Z, k)
+                                    for k in range(1, max_classes + 1)])
+            ncls[ok] = bics.argmin(axis=1) + 1
+        frames.append(pd.DataFrame(
+            {"psi": psi, "n_classes": ncls, "sigma": sd}, index=ends))
+    return pd.concat(frames)
+
+
+# ---------------------------------------------------------------------------
 # Signal extraction
 # ---------------------------------------------------------------------------
 
