@@ -189,6 +189,30 @@ hour 79% of the time. For prospective informed-trading detection, the
 compressed side is the predictive one, exactly as the framework
 document's interpretation table suggests.
 
+### Window length comparison (30 vs 60 vs 90 minutes)
+
+| statistic | w30 | w60 | w90 |
+|---|---|---|---|
+| psi mean (small-sample bias) | 0.250 | 0.138 | 0.104 |
+| z excess kurtosis (signal fatness) | 1.8 | 5.2 | 7.8 |
+| P(z ≥ 4) (×178 = w60 vs null) | 0.27% | 0.56% | 0.69% |
+| multi-class lift (alert/calm) | 7.2× | 9.1× | 7.9× |
+| psi autocorr lag-30 | 0.20 | 0.39 | 0.50 |
+| strict catalog hits | **6/9** | 5/9 | 5/9 |
+| FOMC-slot share of dispersed peaks | 22% | 24% | 24% |
+| compressed-alert vol expansion (median / P) | 1.21 / 71% | **1.33 / 79%** | 1.32 / 79% |
+| dispersed-alert vol contraction (median) | 0.72 | 0.62 | 0.68 |
+
+w30 buys event *coverage* (it clears the post-open halts fast enough to
+catch COVID circuit breakers #1 and #3, and resolves 1-minute events like
+the 2020-10-06 stimulus-tweet drop) but pays for it everywhere else: psi's
+small-sample bias doubles, the z distribution loses its informative fat
+tail, class detection weakens, episodes fragment (2,791 vs 1,808), and the
+compressed-side predictive edge drops. **Recommended: 60-minute windows as
+the primary signal, with the 30-minute panel as a complementary fast layer
+for the first hour of trading and sub-5-minute events.** Below 30 minutes
+the 12-bin KL histogram and the BIC mixture test run out of data.
+
 ### Population counts
 
 - Rolling mode: ~330 populations/day of 60 minute-incomes; 83,279 windows
