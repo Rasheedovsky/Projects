@@ -1,0 +1,31 @@
+event,date,sign,method,max_conf,detected
+2004 rally top,2004-03-05,pos,NM,0.5,True
+2004 rally top,2004-03-05,pos,LM,0.4,True
+2004 rally top,2004-03-05,pos,M-LNN,0.8,True
+2004 rally top,2004-03-05,pos,M-LNN-KAN,0.8,True
+2004 rally top,2004-03-05,pos,P-LNN,0.4,True
+GFC top,2007-10-09,pos,NM,0.0,False
+GFC top,2007-10-09,pos,LM,1.0,True
+GFC top,2007-10-09,pos,M-LNN,0.6,True
+GFC top,2007-10-09,pos,M-LNN-KAN,0.5,True
+GFC top,2007-10-09,pos,P-LNN,0.6,True
+flash-crash top,2010-04-23,pos,NM,0.2,False
+flash-crash top,2010-04-23,pos,LM,0.2,False
+flash-crash top,2010-04-23,pos,M-LNN,0.75,True
+flash-crash top,2010-04-23,pos,M-LNN-KAN,0.75,True
+flash-crash top,2010-04-23,pos,P-LNN,0.4,True
+9/11 trough,2001-09-21,neg,NM,0.0,False
+9/11 trough,2001-09-21,neg,LM,0.67,True
+9/11 trough,2001-09-21,neg,M-LNN,0.6,True
+9/11 trough,2001-09-21,neg,M-LNN-KAN,0.5,True
+9/11 trough,2001-09-21,neg,P-LNN,0.6,True
+2002 bottom,2002-10-09,neg,NM,0.0,False
+2002 bottom,2002-10-09,neg,LM,0.67,True
+2002 bottom,2002-10-09,neg,M-LNN,0.4,True
+2002 bottom,2002-10-09,neg,M-LNN-KAN,0.4,True
+2002 bottom,2002-10-09,neg,P-LNN,0.75,True
+GFC bottom,2009-03-09,neg,NM,0.0,False
+GFC bottom,2009-03-09,neg,LM,1.0,True
+GFC bottom,2009-03-09,neg,M-LNN,1.0,True
+GFC bottom,2009-03-09,neg,M-LNN-KAN,0.6,True
+GFC bottom,2009-03-09,neg,P-LNN,0.75,True

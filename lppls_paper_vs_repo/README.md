@@ -390,13 +390,26 @@ All evidence combined — 500 synthetic scenarios, 60 real pre-peak windows
 (TASI + SPY), 12 flagged historical episodes (SPY + Nasdaq census) — rated
 by accuracy and time:
 
-| Rank | Algorithm | t_c accuracy (real bubbles) | price_c accuracy | speed/fit | robustness |
-|---|---|---|---|---|---|
-| **1** | **P-LNN-100K** | ★★★ best on all three episodes (+1 d TASI, −3 d SPY, −34 d Nasdaq) | ★★ ±0.6–2% (one divergent outlier) | ★★★ **0.5 ms** | deterministic; rare price_c blow-up needs a sanity clamp |
-| **2** | **M-LNN-KAN** *(extension)* | ★★ best mono method on strong bubbles (−4 d TASI) | ★★★ best in 4/6 SPY episodes (−0.1…−1%) | ★ 2.8 s | deterministic; wider window-to-window spread |
-| **3** | **M-LNN** | ★★ −12…−23 d (early) | ★★ ±1.5–3% | ★★ 0.45 s | best tails on synthetic (p95 16.6 d); no failures |
-| **4** | **LM (paper protocol)** | ★ −16…−22 d (early) | ★★ ±2–2.3% | ★★ 0.4–0.9 s | best synthetic median (tied); no failures |
-| **5** | **lppls-repo (NM)** | ★ medians ok, IQR spans months | ★ −1…−7% | ★★★ 13–81 ms | unseeded RNG, 2–3 fails/30; strong **as an ensemble detector** |
+| Rank | Algorithm | t_c accuracy (real bubbles) | price_c accuracy | multi-bubble detection (SPY 98–10, 6 events) | speed/fit | robustness |
+|---|---|---|---|---|---|---|
+| **1** | **P-LNN-100K** | ★★★ best on all three episodes (+1 d TASI, −3 d SPY, −34 d Nasdaq) | ★★ ±0.6–2% (one divergent outlier) | ★★★ **6/6** | ★★★ **0.5 ms** | deterministic; rare price_c blow-up needs a sanity clamp |
+| **2** | **M-LNN-KAN** *(extension)* | ★★ best mono method on strong bubbles (−4 d TASI) | ★★★ best in 4/6 SPY episodes (−0.1…−1%) | ★★★ **6/6** | ★ 2.8 s | deterministic; wider window-to-window spread |
+| **3** | **M-LNN** | ★★ −12…−23 d (early) | ★★ ±1.5–3% | ★★★ **6/6** | ★★ 0.45 s | best tails on synthetic (p95 16.6 d); no failures |
+| **4** | **LM (paper protocol)** | ★ −16…−22 d (early) | ★★ ±2–2.3% | ★★ 5/6 (missed 2010 flash-crash top) | ★★ 0.4–0.9 s | best synthetic median (tied); no failures |
+| **5** | **lppls-repo (NM)** | ★ medians ok, IQR spans months | ★ −1…−7% | ★ 1/6 at sparse budget (needs the dense 11-window census to reach 8 events) | ★★★ 13–81 ms | unseeded RNG, 2–3 fails/30; works **only as a dense ensemble** |
+
+**Multi-bubble detection** (`results/fig_method_sweep_spy.png`,
+`method_detection_scorecard.csv`): each method independently scanned SPY
+1998–2010 (5-window ensemble every 20 trading days; detected = confidence
+≥ 0.25 within 120 trading days before the realised extreme). The three
+neural methods caught **all six events** — 2004 rally top, 2007-10 GFC top,
+2010-04 flash-crash top, and the 2001 / 2002 / 2009-03 bottoms as negative
+bubbles — LM caught 5, while the repo's Nelder-Mead found almost nothing at
+this compute budget (its census needed 11 windows every 5 days to reach its
+8 detections): per unit of compute, the paper's methods are decisively more
+sample-efficient detectors.
+
+![Method sweep](results/fig_method_sweep_spy.png)
 
 **Opinion.** For a live indicator, **P-LNN-100K is the best algorithm**: it
 is the only method whose median critical time landed essentially on the
