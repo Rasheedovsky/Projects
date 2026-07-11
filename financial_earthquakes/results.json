@@ -180,6 +180,23 @@
       "branching n": 0.3358682684
     }
   },
+  "nyblom_full_sample": {
+    "individual": {
+      "mu": 0.2975432684656552,
+      "K0": 0.2587444330974058,
+      "c": 0.19295609006776876
+    },
+    "joint": 0.4778488703825387,
+    "unstable_joint": false
+  },
+  "walk_forward": {
+    "total_oos_logscore": {
+      "mle": -231.10470590146275,
+      "kanpin": -241.51147248024947,
+      "poisson": -230.9829301612251
+    },
+    "n_steps": 8
+  },
   "daily": {
     "n_events": 25,
     "mu": 0.09512191525384754,

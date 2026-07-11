@@ -5,7 +5,7 @@ Alcoa (AA) hourly data (and a daily aggregate).
 
 Run:  python3 run_analysis.py [path/to/AA_h.csv]
 
-Produces figures/fig1..fig5 (PNG) and results.json.
+Produces figures/fig1..fig7 (PNG) and results.json.
 Every section prints what it is doing and why; see etas.py / kan_pin.py
 for the underlying mathematics.
 """
@@ -27,6 +27,7 @@ import pandas as pd
 from etas import (CrossETAS, ETASModel, EventData, extract_events,
                   fit_variants, load_yfinance_csv, log_returns)
 from kan_pin import KANPINHawkes
+from stability import NYBLOM_CRIT_5PCT, nyblom_test, walk_forward
 
 # ----------------------------------------------------------------------
 # chart style (light mode, validated palette)
@@ -505,7 +506,110 @@ def figure_kanpin(falls, kp, mle, tab):
 
 
 # ======================================================================
-# 8. Daily data (small-sample caveat)
+# 8. Parameter stability (Nyblom) + walk-forward validation, both methods
+# ======================================================================
+
+def stability_and_walkforward(falls, best):
+    print()
+    print("=" * 72)
+    print("8. PARAMETER STABILITY (running Nyblom) + WALK-FORWARD VALIDATION")
+    print("=" * 72)
+    mle_full = best["fall"] if best["fall"].kernel == "exp" else \
+        ETASModel(kernel="exp", use_alpha=False).fit(falls, seed=1)
+    ny = nyblom_test(mle_full)
+    print("Full-sample Nyblom stability test (5% critical: individual "
+          f"{ny['crit_individual_5pct']}, joint {ny['crit_joint_5pct']}):")
+    for n, v in ny["individual"].items():
+        print(f"  {n:5s}: {v:.3f} {'UNSTABLE' if ny['unstable_individual'][n] else '(stable)'}")
+    print(f"  joint: {ny['joint']:.3f} "
+          f"{'UNSTABLE' if ny['unstable_joint'] else '(stable)'}")
+    print()
+    print("Walk-forward (expanding window, both estimators refit each step;")
+    print("OOS = predictive log-score on the next segment, full history,")
+    print("parameters frozen at the refit time; Poisson benchmark = train rate):")
+    wf = walk_forward(falls, n_steps=8)
+    tot = {m: float(wf[f"oos_logscore_{m}"].sum())
+           for m in ("mle", "kanpin", "poisson")}
+    print(f"\nTOTAL OOS log-score: MLE {tot['mle']:.1f} | "
+          f"KAN-PIN {tot['kanpin']:.1f} | Poisson {tot['poisson']:.1f}")
+    print("Reading: windowed MLE mostly finds K0~0 (calm training windows), so")
+    print("it scores like Poisson OOS; KAN-PIN's stable-but-short-kernel")
+    print("clustering scores slightly worse. On one year of hourly data the")
+    print("self-excitation adds no OOS predictive value at these window sizes;")
+    print("the running Nyblom never rejects within-window stability, while the")
+    print("across-window K0 path shows regime dependence (calm -> turbulent).")
+    RESULTS["nyblom_full_sample"] = {"individual": ny["individual"],
+                                     "joint": ny["joint"],
+                                     "unstable_joint": ny["unstable_joint"]}
+    RESULTS["walk_forward"] = {"total_oos_logscore": tot,
+                               "n_steps": int(len(wf))}
+    return wf, ny
+
+
+def figure_stability(falls, wf):
+    dates = [d.strftime("%d %b %y") for d in wf["date"]]
+    x = np.arange(len(wf))
+    fig, axes = plt.subplots(2, 2, figsize=(11.5, 7.5))
+    specs = [("mu", "background rate $\\mu$ (events/h)", axes[0, 0], None),
+             ("K0", "fertility $K_0$ (= branching ratio)", axes[0, 1], None),
+             ("c", "kernel scale $c$ (hours, log)", axes[1, 0], "log")]
+    for par, title, ax, yscale in specs:
+        ax.plot(x, wf[f"mle_{par}"], color=C["fall"], marker="o", ms=5,
+                label="MLE (paper)")
+        ax.plot(x, wf[f"kp_{par}"], color=C["run"], marker="s", ms=5,
+                label="KAN-PIN")
+        if yscale:
+            ax.set_yscale(yscale)
+        ax.set_title(title)
+        ax.set_xticks(x[::2]); ax.set_xticklabels(dates[::2], fontsize=8)
+        ax.legend(fontsize=8)
+    ax = axes[1, 1]
+    ax.plot(x, wf["nyblom_joint"], color=C["aqua"], marker="o", ms=5,
+            label="joint statistic")
+    for par, ls in (("mu", ":"), ("K0", "--"), ("c", "-.")):
+        ax.plot(x, wf[f"nyblom_{par}"], color=C["muted"], lw=1.1, ls=ls,
+                label=f"{par}")
+    ax.axhline(wf["nyblom_crit_joint"].iloc[0], color=C["fall"], lw=1.2,
+               ls="--")
+    ax.text(0.1, wf["nyblom_crit_joint"].iloc[0], " 5% critical (joint)",
+            color=C["fall"], fontsize=8, va="bottom")
+    ax.axhline(NYBLOM_CRIT_5PCT[1], color=C["yellow"], lw=1.2, ls="--")
+    ax.text(0.1, NYBLOM_CRIT_5PCT[1], " 5% critical (individual)",
+            color=C["yellow"], fontsize=8, va="bottom")
+    ax.set_title("running Nyblom stability test")
+    ax.set_xticks(x[::2]); ax.set_xticklabels(dates[::2], fontsize=8)
+    ax.legend(fontsize=8, ncol=2)
+    fig.suptitle("Walk-forward parameter paths and running Nyblom test "
+                 "(expanding windows)", fontweight="bold")
+    fig.tight_layout()
+    fig.savefig(FIGS / "fig6_stability.png", dpi=150)
+    plt.close(fig)
+    print("saved figures/fig6_stability.png")
+
+    oos = wf.dropna(subset=["oos_logscore_mle"])
+    fig, ax = plt.subplots(figsize=(10, 4.2))
+    xb = np.arange(len(oos)); w = 0.38
+    ax.bar(xb - w / 2, oos["oos_logscore_mle"] - oos["oos_logscore_poisson"],
+           w, color=C["fall"], label="MLE (paper)")
+    ax.bar(xb + w / 2, oos["oos_logscore_kanpin"] - oos["oos_logscore_poisson"],
+           w, color=C["run"], label="KAN-PIN")
+    ax.axhline(0, color=C["ink2"], lw=1.2)
+    ax.text(len(oos) - 0.4, 0, " Poisson benchmark", color=C["ink2"],
+            fontsize=8, va="bottom", ha="right")
+    ax.set_xticks(xb)
+    ax.set_xticklabels([d.strftime("%d %b %y") for d in oos["date"]], fontsize=8)
+    ax.set_ylabel("OOS log-score minus Poisson")
+    ax.set_title("Walk-forward out-of-sample predictive log-score by segment "
+                 "(above 0 = beats Poisson)")
+    ax.legend(fontsize=8)
+    fig.tight_layout()
+    fig.savefig(FIGS / "fig7_walkforward_oos.png", dpi=150)
+    plt.close(fig)
+    print("saved figures/fig7_walkforward_oos.png")
+
+
+# ======================================================================
+# 9. Daily data (small-sample caveat)
 # ======================================================================
 
 def daily_analysis(r_d: pd.Series):
@@ -543,6 +647,8 @@ def main(csv_path: str):
     synthetic_validation()
     kp, mle, tab = kan_pin_real(falls, best)
     figure_kanpin(falls, kp, mle, tab)
+    wf, ny = stability_and_walkforward(falls, best)
+    figure_stability(falls, wf)
     daily_analysis(r_d)
     (HERE / "results.json").write_text(json.dumps(RESULTS, indent=2, default=float))
     print(f"\nresults.json written.  total {time.time() - t0:.0f}s")

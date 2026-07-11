@@ -143,6 +143,44 @@ within a week ≈ 0.84; the early-July fall episode is ~50/50 to be over, with �
 further extreme drops expected before it dies out. (Runs: nearly identical
 numbers, driven purely by the background rate.)
 
+### Parameter stability (running Nyblom test) and walk-forward validation
+
+Estimation now ships with two robustness layers (`stability.py`), and **both
+estimators — the paper's MLE and KAN-PIN — are refit at every step for
+comparison** (fig6, fig7):
+
+- **Nyblom (1989)/Hansen (1992) stability test**, adapted to point processes:
+  the ETAS log-likelihood is decomposed into per-event score contributions;
+  cumulative scores give the classic statistic per parameter and jointly
+  (5% critical values 0.470 individual / 1.01 joint for 3 parameters). On the
+  full sample: μ 0.30, K₀ 0.26, c 0.19, joint 0.48 — **no parameter instability
+  detected** within the year.
+- **Walk-forward validation**: an expanding window is refit at 8 steps
+  (Dec 2025 → Jul 2026). At each step the Nyblom test is recomputed (the
+  *running* test — it stays below the 5% line everywhere) and both parameter
+  sets are scored **out of sample** on the next segment with the point-process
+  predictive log-score, against a homogeneous-Poisson benchmark.
+
+What it shows, honestly:
+
+| | MLE (paper) | KAN-PIN |
+|---|---|---|
+| K₀ path across windows | 0.00 → 0.18 (calm windows find no clustering; only the full year does) | 0.26–0.37, remarkably stable |
+| c path | rides upward, unidentified while K₀ ≈ 0 | 1–3 h (short-biased but stable) |
+| total OOS log-score | **−231.1** | −241.5 |
+| Poisson benchmark | −231.0 | |
+
+**Neither estimator beats the Poisson benchmark out of sample on this year of
+hourly data** — windowed MLE mostly estimates K₀ ≈ 0 and therefore *is* nearly
+Poisson, while KAN-PIN's stable-but-short-kernel clustering slightly overfits.
+The running Nyblom never rejects *within-window* stability, yet the K₀ path
+shows the regime dependence directly: self-excitation only becomes visible
+once the turbulent spring/summer 2026 enters the window. Conclusion of the
+validation: on this sample the indicator's in-sample structure is genuine
+(AIC, KS test) but *predictively* the clustering is too weak to exploit at
+these window sizes — decades of data (the paper's setting) are what make the
+EWS skill material.
+
 ### Daily data
 
 Aggregating the hourly closes to ~250 daily returns (90% threshold → 25 events):
@@ -234,6 +272,12 @@ does not).
 
 ## 5. Conclusion
 
+0. **Stability & validation**: the full-sample Nyblom test finds the ETAS
+   parameters stable within the year (joint 0.48 < 1.01), and the running
+   test never rejects on any expanding window; but walk-forward validation
+   shows neither estimator beats a Poisson benchmark out of sample here —
+   the clustering signal, while statistically present in-sample, is too weak
+   on one year of single-name hourly data to be predictively exploitable.
 1. **The paper's method works as advertised on AA hourly data, with honest
    small-sample limits.** Extreme *falls* behave like earthquakes: a fitted ETAS
    model finds significant self-excitation (n ≈ 0.18, ~2-week decay) and passes
@@ -263,9 +307,10 @@ does not).
 |---|---|
 | `etas.py` | the paper's method: events, ETAS intensity/likelihood/MLE, diagnostics, simulation, EWS, episode-duration forecasts, bivariate cross-excitation; self-explaining docstrings + `explain()` |
 | `kan_pin.py` | Jacobi-KAN + Fourier features + integral-form physics + MDMM curriculum estimator |
+| `stability.py` | Nyblom/Hansen parameter-stability test (per-event scores) + walk-forward validation engine running both estimators |
 | `run_analysis.py` | end-to-end pipeline: all figures, tables, results.json (`python3 run_analysis.py`) |
 | `Financial_Earthquakes_Hawkes.ipynb` | executed notebook walking through everything |
-| `figures/` | fig1 events, fig2 intensity indicator, fig3 EWS, fig4 duration forecasts, fig5 KAN-PIN |
+| `figures/` | fig1 events, fig2 intensity indicator, fig3 EWS, fig4 duration forecasts, fig5 KAN-PIN, fig6 stability/Nyblom, fig7 walk-forward OOS |
 | `AA_h.csv` | the hourly input data (daily series is aggregated from it) |
 | `results.json` | key numbers from the last run |
 
