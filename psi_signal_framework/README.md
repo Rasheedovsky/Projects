@@ -142,6 +142,53 @@ Outputs in `results_full/`: `episodes_gross_return.csv` (all 1,337
 episodes), `panel_gross_return.csv.gz` (full per-window psi / n_classes /
 sigma / z panel), `timeline_2008_2021.png`, `flashcrash_zooms.png`.
 
+## Method statistics — 60-minute windows, standardized log returns
+
+`results_full_w60/` holds the preferred configuration (incomes = gross
+returns, whose logs are the minute log returns, standardized per window;
+60-minute sliding windows; 1,100,488 windows). `method_stats.py`
+reproduces the table. Key numbers:
+
+| statistic | value |
+|---|---|
+| psi: mean / sd / median / q99 | 0.138 / 0.076 / 0.123 / 0.417 |
+| psi skew / excess kurtosis | 2.4 / 11.6 |
+| psi autocorrelation lag-1 / lag-30 | 0.96 / 0.39 |
+| z skew / excess kurtosis | 1.5 / 5.2 |
+| P(z ≥ 1) obs vs normal null | 14.9% vs 15.9% |
+| P(z ≥ 2) obs vs null | 4.7% vs 2.3% |
+| P(z ≥ 3) obs vs null | 1.5% vs 0.14% (11×) |
+| P(z ≥ 4) obs vs null | 0.56% vs 0.003% (178×) |
+| n_classes = 1 / 2 / 3 | 90.5% / 8.7% / 0.8% |
+| multi-class in alert vs calm windows | 57.3% vs 6.3% (9.1× lift) |
+| episodes (z ≥ 3) / dispersed | 1,808 / 257 |
+| strict catalog hits | 5/9 (incl. COVID CB #1, which 90-min missed) |
+| dispersed peaks in 13:55–14:20 FOMC slot | 24% (chance ≈ 6%) |
+
+The z-tails are far heavier than the Gaussian null and psi is highly
+persistent — alerts are real clustered states, not noise; but for exact
+false-positive budgeting, calibrate thresholds on empirical quantiles of z
+(e.g. the empirical 99th percentile of z is ≈ 3.7, not 2.33).
+
+**Forward information content** (median next-30-min vol ÷ trailing 60-min
+vol; 1 = no change — this deseasonalizes the intraday vol U-shape):
+
+| signal state | n | median expansion | P(vol expands) |
+|---|---|---|---|
+| dispersed alert (z ≥ 3, σ high) | 3,960 | 0.62 | 18% |
+| compressed alert (z ≥ 3, σ low) | 6,655 | **1.33** | **79%** |
+| warning (1 ≤ z < 3) | 146,412 | 1.02 | 52% |
+| calm (\|z\| < 1) | 790,144 | 0.98 | 47% |
+
+So the two alert types carry opposite forward information: a **dispersed**
+alert marks the climax of an information event (vol mean-reverts — a
+precise *nowcast*, not a forecast), while a **compressed** alert — the
+"artificially suppressed volatility" regime, e.g. the pre-FOMC pin or
+quiet positioning — *predicts* a volatility expansion in the next half
+hour 79% of the time. For prospective informed-trading detection, the
+compressed side is the predictive one, exactly as the framework
+document's interpretation table suggests.
+
 ### Population counts
 
 - Rolling mode: ~330 populations/day of 60 minute-incomes; 83,279 windows
