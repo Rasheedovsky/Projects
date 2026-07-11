@@ -5,7 +5,7 @@ Alcoa (AA) hourly data (and a daily aggregate).
 
 Run:  python3 run_analysis.py [path/to/AA_h.csv]
 
-Produces figures/fig1..fig7 (PNG) and results.json.
+Produces figures/fig1..fig9 (PNG) and results.json.
 Every section prints what it is doing and why; see etas.py / kan_pin.py
 for the underlying mathematics.
 """
@@ -28,6 +28,8 @@ from etas import (CrossETAS, ETASModel, EventData, extract_events,
                   fit_variants, load_yfinance_csv, log_returns)
 from kan_pin import KANPINHawkes
 from stability import NYBLOM_CRIT_5PCT, nyblom_test, walk_forward
+from overnight import (KANPINOvernight, OvernightETAS, extract_gap_stream,
+                       split_overnight_intraday, walk_forward_overnight)
 
 # ----------------------------------------------------------------------
 # chart style (light mode, validated palette)
@@ -609,7 +611,180 @@ def figure_stability(falls, wf):
 
 
 # ======================================================================
-# 9. Daily data (small-sample caveat)
+# 9. Overnight gaps as triggers of intraday self-excitation
+# ======================================================================
+
+def overnight_analysis(csv_path: str):
+    print()
+    print("=" * 72)
+    print("9. OVERNIGHT GAPS AS TRIGGERS OF INTRADAY EXTREMES")
+    print("=" * 72)
+    df = load_yfinance_csv(csv_path)
+    r_intra, gaps_all = split_overnight_intraday(df)
+    print(f"separated {len(r_intra)} intraday returns from "
+          f"{len(gaps_all)} overnight gaps")
+    falls_i = extract_events(r_intra, "fall", 0.95)
+    runs_i = extract_events(r_intra, "run", 0.95)
+    src = extract_gap_stream(gaps_all, 0.75, "abs")
+    print(f"intraday fall events: {falls_i.n} (M0={falls_i.M0:.4f}); "
+          f"gap triggers: {src.n} (|gap| >= {src.G0:.4f})")
+    out = {}
+    for ev in (falls_i, runs_i):
+        m = OvernightETAS(ev, src).fit(seed=1)
+        lr = m.lr_test_no_overnight(seed=1)
+        ny = m.nyblom()
+        print(f"\n--- intraday {ev.tail.upper()}s ---")
+        print(m.explain())
+        print(f"LR test of overnight triggering: LR={lr['LR']:.1f}, "
+              f"p={lr['pvalue']:.4f}  (self-only lnL={lr['logL_selfonly']:.1f})")
+        print(f"Nyblom joint = {ny['joint']:.2f} "
+              f"(5% crit {ny['crit_joint_5pct']:.2f})"
+              f"{' UNSTABLE' if ny['unstable_joint'] else ' (stable)'}")
+        out[ev.tail] = {"theta": m.theta, "LR": lr["LR"],
+                        "LR_pvalue": lr["pvalue"], "nyblom_joint": ny["joint"]}
+        if ev.tail == "fall":
+            model_fall, lr_fall = m, lr
+    # KAN-PIN comparison on falls
+    kp = KANPINOvernight(falls_i, src, seed=1)
+    kp.fit(epochs=600, verbose=False)
+    ek = kp.eta_hat
+    tab = pd.DataFrame({"MLE (paper)": [model_fall.theta[p] for p in
+                                        OvernightETAS.PARAM_NAMES],
+                        "KAN-PIN": [ek[p] for p in OvernightETAS.PARAM_NAMES]},
+                       index=list(OvernightETAS.PARAM_NAMES))
+    print("\nFull-sample parameter comparison (intraday falls):")
+    print(tab.round(4).to_string())
+    RESULTS["overnight"] = {k: {kk: (dict(vv) if isinstance(vv, dict) else vv)
+                                for kk, vv in v.items()} for k, v in out.items()}
+    RESULTS["overnight"]["kanpin_falls"] = ek
+    return r_intra, gaps_all, falls_i, src, model_fall, kp
+
+
+def figure_overnight(r_intra, gaps_all, falls_i, src, model):
+    """Evidence figure: where do intraday extremes sit within the day, and
+    how does the fitted intensity decompose into background / self / gap
+    triggering?"""
+    # hour-of-day evidence: fall counts by bar position, trigger vs quiet days
+    day_of = pd.Series(r_intra.index.date)
+    barpos = day_of.groupby(day_of.values).cumcount() + 1
+    is_event = np.zeros(len(r_intra), bool)
+    is_event[(falls_i.times - 1).astype(int)] = True
+    gap_days = set(pd.DatetimeIndex(src.dates).date)
+    on_trigger_day = day_of.isin(gap_days).values
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4.4))
+    pos = np.arange(1, 8)
+    n_trig_days, n_quiet_days = len(gap_days), len(set(day_of)) - len(gap_days)
+    f_t = [np.sum(is_event & on_trigger_day & (barpos == p)) / n_trig_days
+           for p in pos]
+    f_q = [np.sum(is_event & ~on_trigger_day & (barpos == p)) / n_quiet_days
+           for p in pos]
+    w = 0.38
+    ax1.bar(pos - w / 2, f_t, w, color=C["fall"],
+            label=f"big-gap days (n={n_trig_days})")
+    ax1.bar(pos + w / 2, f_q, w, color=C["muted"],
+            label=f"quiet-gap days (n={n_quiet_days})")
+    ax1.set_xlabel("intraday hour (bar of the trading day)")
+    ax1.set_ylabel("extreme falls per day")
+    ax1.set_title("Extreme intraday falls cluster in the first hours\n"
+                  "after a big overnight gap (model-free evidence)")
+    ax1.legend(fontsize=8)
+
+    # fitted intensity decomposition on a representative stretch
+    t_grid = np.arange(1.0, falls_i.T + 1.0, 0.25)
+    mu, self_t, trig_t = model._terms(t_grid, model.theta)
+    a, b = falls_i.T - 300, falls_i.T   # last ~6 weeks
+    sel = (t_grid >= a) & (t_grid <= b)
+    ax2.fill_between(t_grid[sel], 0, mu, color=C["grid"], label="background $\\mu$")
+    ax2.fill_between(t_grid[sel], mu, mu + self_t[sel], color=C["seq"][2],
+                     label="intraday self-excitation")
+    ax2.fill_between(t_grid[sel], mu + self_t[sel], mu + self_t[sel] + trig_t[sel],
+                     color=C["fall"], label="overnight-gap trigger")
+    for t in src.times[(src.times >= a) & (src.times <= b)]:
+        ax2.axvline(t, color=C["ink2"], lw=0.6, alpha=0.4, ymax=0.06)
+    ax2.set_xlabel("trading hours (last 6 weeks of sample; ticks = gap opens)")
+    ax2.set_ylabel("fall intensity (events/hour)")
+    ax2.set_title("Fitted intensity decomposition:\ngap spikes at the open, fading in ~1 hour")
+    ax2.legend(fontsize=8, loc="upper left")
+    fig.tight_layout()
+    fig.savefig(FIGS / "fig8_overnight.png", dpi=150)
+    plt.close(fig)
+    print("saved figures/fig8_overnight.png")
+
+
+def overnight_walkforward(falls_i, src, gaps_all):
+    print()
+    print("=" * 72)
+    print("10. WALK-FORWARD (30-day start): overnight model vs benchmarks")
+    print("=" * 72)
+    day_starts = np.concatenate([[1.0], gaps_all["time"].values + 0.5])
+    wf = walk_forward_overnight(falls_i, src, day_starts,
+                                start_days=30, step_days=30)
+    tot = {k: float(wf[f"oos_{k}"].sum())
+           for k in ("full", "selfonly", "kanpin", "poisson")}
+    wins = int((wf["oos_full"] > wf["oos_selfonly"]).sum())
+    print(f"\nTOTAL OOS log-score: overnight-MLE {tot['full']:.1f} | "
+          f"self-only {tot['selfonly']:.1f} | KAN-PIN {tot['kanpin']:.1f} | "
+          f"Poisson {tot['poisson']:.1f}")
+    print(f"overnight model beats self-only in {wins}/{len(wf)} segments; "
+          f"K_o path {wf['mle_K_o'].min():.2f}-{wf['mle_K_o'].max():.2f}; "
+          f"LR significant (p<0.05) from step "
+          f"{int(np.argmax(wf['LR_pvalue'].values < 0.05)) + 1} onward.")
+    RESULTS["overnight_walkforward"] = {"total_oos": tot,
+                                        "wins_vs_selfonly": wins,
+                                        "n_segments": int(len(wf))}
+    return wf
+
+
+def figure_overnight_wf(wf):
+    fig = plt.figure(figsize=(11.5, 7.5))
+    gs = fig.add_gridspec(2, 2, height_ratios=[1.15, 1])
+    dates = [d.strftime("%d %b %y") for d in wf["date"]]
+    x = np.arange(len(wf))
+    ax = fig.add_subplot(gs[0, :])
+    w = 0.27
+    ax.bar(x - w, wf["oos_full"] - wf["oos_poisson"], w, color=C["fall"],
+           label="overnight-trigger MLE")
+    ax.bar(x, wf["oos_selfonly"] - wf["oos_poisson"], w, color=C["yellow"],
+           label="self-only ETAS")
+    ax.bar(x + w, wf["oos_kanpin"] - wf["oos_poisson"], w, color=C["run"],
+           label="overnight KAN-PIN")
+    ax.axhline(0, color=C["ink2"], lw=1.2)
+    ax.text(len(wf) - 0.5, 0, " Poisson benchmark", color=C["ink2"],
+            fontsize=8, va="bottom", ha="right")
+    ax.set_xticks(x); ax.set_xticklabels(dates, fontsize=8)
+    ax.set_ylabel("OOS log-score minus Poisson")
+    ax.set_title("Walk-forward (30-day start): out-of-sample predictive "
+                 "log-score by segment (above 0 = beats Poisson)")
+    ax.legend(fontsize=8, ncol=3)
+
+    ax = fig.add_subplot(gs[1, 0])
+    ax.plot(x, wf["mle_K_o"], color=C["fall"], marker="o", ms=5,
+            label="$K_o$ (overnight trigger), MLE")
+    ax.plot(x, wf["mle_K_s"], color=C["yellow"], marker="o", ms=5,
+            label="$K_s$ (intraday self), MLE")
+    ax.plot(x, wf["kp_K_o"], color=C["run"], marker="s", ms=5,
+            label="$K_o$, KAN-PIN")
+    ax.set_xticks(x[::2]); ax.set_xticklabels(dates[::2], fontsize=8)
+    ax.set_title("fertility paths across windows")
+    ax.legend(fontsize=8)
+
+    ax = fig.add_subplot(gs[1, 1])
+    ax.plot(x, wf["LR_overnight"], color=C["aqua"], marker="o", ms=5,
+            label="LR statistic")
+    ax.axhline(7.81, color=C["muted"], ls="--", lw=1.2)
+    ax.text(0.1, 7.81, " 5% critical, $\\chi^2(3)$", color=C["muted"],
+            fontsize=8, va="bottom")
+    ax.set_xticks(x[::2]); ax.set_xticklabels(dates[::2], fontsize=8)
+    ax.set_title("running LR test: is overnight triggering significant?")
+    ax.legend(fontsize=8)
+    fig.tight_layout()
+    fig.savefig(FIGS / "fig9_overnight_wf.png", dpi=150)
+    plt.close(fig)
+    print("saved figures/fig9_overnight_wf.png")
+
+
+# ======================================================================
+# 11. Daily data (small-sample caveat)
 # ======================================================================
 
 def daily_analysis(r_d: pd.Series):
@@ -649,6 +824,10 @@ def main(csv_path: str):
     figure_kanpin(falls, kp, mle, tab)
     wf, ny = stability_and_walkforward(falls, best)
     figure_stability(falls, wf)
+    r_intra, gaps_all, falls_i, src, model_on, kp_on = overnight_analysis(csv_path)
+    figure_overnight(r_intra, gaps_all, falls_i, src, model_on)
+    wf_on = overnight_walkforward(falls_i, src, gaps_all)
+    figure_overnight_wf(wf_on)
     daily_analysis(r_d)
     (HERE / "results.json").write_text(json.dumps(RESULTS, indent=2, default=float))
     print(f"\nresults.json written.  total {time.time() - t0:.0f}s")

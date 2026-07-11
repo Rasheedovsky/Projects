@@ -189,7 +189,74 @@ Direction agrees (mild clustering of daily crashes) but 25 events cannot support
 serious inference — the paper uses half a century of daily data. Treat as
 illustration; the hourly results above are the substantive ones.
 
-## 3. The KAN-PIN architecture (estimating the parameters with your two papers)
+## 3. Overnight gaps as triggers of intraday extremes (separated-returns model)
+
+The user's hypothesis: overnight information arrives as one price *gap* at the
+open, and a big gap should act like a distant mainshock for the intraday
+session. So we **separate the two return types** (`overnight.py`): intraday
+returns are within-day only (the first bar uses open→close so no overnight
+leaks in), and the overnight gap `g_d = ln(O_d / C_{d-1})` enters the intraday
+model as an **exogenous marked trigger stream**:
+
+```
+λ_intra(t) = μ + K_s Σ_intraday φ(t−tᵢ; c_s) + K_o Σ_gaps e^{α_o(|g_d|−G0)} φ(t−open_d; c_o)
+```
+
+Gap triggers = |gap| above its 75% quantile (63 of 250 days, G0 ≈ 2%). This is
+the thesis's cross-excitation construction (ch. 3) with the "other market"
+being the overnight session.
+
+**Result — the hypothesis is strongly confirmed, and it reinterprets the
+earlier finding** (fig8, fig9):
+
+| intraday falls | self-only ETAS | overnight-trigger model |
+|---|---|---|
+| ln L | −351.0 | **−331.5** |
+| LR test of K_o = 0 | | **LR = 38.9, p < 0.0001** |
+| intraday self-excitation K_s | 0.18 | **0.00** |
+| gap trigger K_o | — | 0.26 (threshold gap) → 0.37 (top-decile gap) |
+| trigger half-life c_o·ln2 | — | **0.5 trading hours** |
+
+- A large overnight gap sparks ~0.26–0.37 extreme intraday falls, almost all
+  within the **first trading hour** (model-free confirmation in fig8: 0.32
+  extreme falls in hour 1 on big-gap days vs 0.15 on quiet days).
+- **Once gaps are controlled for, intraday self-excitation vanishes** — the
+  "self-excitation" found by the plain hourly model was overnight-gap
+  clustering in disguise. The same holds for intraday runs (LR = 40.4,
+  K_o = 0.35): gaps trigger extreme moves in *both* directions — a volatility
+  channel, not a directional one (α_o is small; gap *occurrence* matters more
+  than its size at this sample size).
+- Nyblom stability: joint 0.82 (falls) / 0.77 (runs), well below the 5%
+  critical value — the gap-trigger parameters are stable.
+
+**Walk-forward validation (30-day start, 30-day steps, both estimators)** —
+this is the first model in the project that genuinely beats the benchmarks
+out of sample:
+
+| total OOS predictive log-score | |
+|---|---|
+| **overnight-trigger MLE** | **−300.3** |
+| self-only ETAS | −318.1 |
+| Poisson | −318.1 |
+| overnight KAN-PIN | −329.6 |
+
+The overnight model wins in **7 of 8 segments**; K_o is already ≈0.20 in the
+first 30-day window (8 events!) and stays in 0.20–0.39 throughout; the LR
+test is significant from the second window onward and strengthens
+monotonically (8.7 → 35.8); the running Nyblom never rejects. The KAN-PIN
+variant detects the same gap-linked morning clustering but splits credit
+between K_s and K_o (its documented short-kernel/leakage bias) and loses to
+Poisson OOS — MLE is clearly the right estimator for this model too.
+
+**Ready for the 11-year 1-minute SPY data**: `split_overnight_intraday`
+groups by calendar day and works at any bar frequency, and thresholds are
+quantile-based. One change is required first: at ~53k events the O(N²)
+matrix likelihood must be swapped for the exponential-kernel O(N) recursion
+(same interface); expect the gap-trigger structure to be far better
+identified with 2,700+ gap days, and α_o (gap-size leverage) to become
+significant.
+
+## 4. The KAN-PIN architecture (estimating the parameters with your two papers)
 
 The inverse problem "find η = (μ, K₀, α, c, ω) from event data" is recast in
 PINNverse's constrained form, with a KAN as the network ([`kan_pin.py`](kan_pin.py)):
@@ -251,7 +318,7 @@ intractable (the thesis's chapter 5 estimates Hawkes models from *option prices*
 with machine learning — precisely the regime where a KAN-PIN generalizes and MLE
 does not).
 
-## 4. Further applications of the indicator
+## 5. Further applications of the indicator
 
 - **Risk management**: λ(t) is a real-time tail-risk gauge — scale VaR/ES or
   de-lever when the fall intensity is multiples of μ; the branching ratio n is a
@@ -270,9 +337,16 @@ does not).
 - **Beyond finance**: the same code fits any clustered event stream —
   order-flow bursts, liquidity droughts, cyber-attack waves, social unrest.
 
-## 5. Conclusion
+## 6. Conclusion
 
-0. **Stability & validation**: the full-sample Nyblom test finds the ETAS
+0. **Overnight → intraday triggering (the separated-returns model) is the
+   headline empirical result**: extreme overnight gaps trigger ~0.3 extreme
+   intraday moves in the first trading hour (LR p < 0.0001, stable by Nyblom,
+   K_o ≈ 0.2–0.4 in every walk-forward window from 30 days on), it explains
+   away the apparent intraday self-excitation, and it is the only model here
+   that beats Poisson out of sample (−300.3 vs −318.1 total log-score,
+   7/8 segments).
+1. **Stability & validation**: the full-sample Nyblom test finds the ETAS
    parameters stable within the year (joint 0.48 < 1.01), and the running
    test never rejects on any expanding window; but walk-forward validation
    shows neither estimator beats a Poisson benchmark out of sample here —
@@ -308,9 +382,10 @@ does not).
 | `etas.py` | the paper's method: events, ETAS intensity/likelihood/MLE, diagnostics, simulation, EWS, episode-duration forecasts, bivariate cross-excitation; self-explaining docstrings + `explain()` |
 | `kan_pin.py` | Jacobi-KAN + Fourier features + integral-form physics + MDMM curriculum estimator |
 | `stability.py` | Nyblom/Hansen parameter-stability test (per-event scores) + walk-forward validation engine running both estimators |
+| `overnight.py` | separated overnight/intraday returns; overnight-gap-trigger ETAS (MLE + LR test + Nyblom) and KAN-PIN variant; 30-day walk-forward |
 | `run_analysis.py` | end-to-end pipeline: all figures, tables, results.json (`python3 run_analysis.py`) |
 | `Financial_Earthquakes_Hawkes.ipynb` | executed notebook walking through everything |
-| `figures/` | fig1 events, fig2 intensity indicator, fig3 EWS, fig4 duration forecasts, fig5 KAN-PIN, fig6 stability/Nyblom, fig7 walk-forward OOS |
+| `figures/` | fig1 events, fig2 intensity indicator, fig3 EWS, fig4 duration forecasts, fig5 KAN-PIN, fig6 stability/Nyblom, fig7 walk-forward OOS, fig8 overnight triggers, fig9 overnight walk-forward |
 | `AA_h.csv` | the hourly input data (daily series is aggregated from it) |
 | `results.json` | key numbers from the last run |
 
