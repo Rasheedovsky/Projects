@@ -1,6 +1,6 @@
 # Bubble detection run summary
 
-Data: `AA_h.csv` — 1749 hourly bars, 2025-07-11 to 2026-07-10.
+Data: `AA_h.csv` — 1749 bars, 2025-07-11 to 2026-07-10.
 Label horizon: 21 bars. Walk-forward folds: 5 (purge = horizon).
 
 ## Full-sample GSADF test
@@ -54,4 +54,4 @@ accuracy = 0.389 (base rate up = 0.479), AUC = 0.338, n = 750
 ## Caveats
 - Forward labels overlap (h = 21); Newey-West t-stats partially correct this, but per-fold sample sizes are small — treat results as a research signal, not a tradable backtest.
 - Causal identification is *selection-on-observables*: tau is causal only insofar as the stability/regime features span the confounders of the explosiveness flag.
-- One asset, one year of hourly data; upgrade path is a cross-sectional panel.
+- Single asset series; upgrade path is a cross-sectional panel.

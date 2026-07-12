@@ -75,6 +75,7 @@ def main():
 
     # ---------------- data & features ----------------
     df = load_yf_csv(args.csv)
+    asset = os.path.splitext(os.path.basename(args.csv))[0]
     print(f"Loaded {len(df)} bars: {df.index[0]} .. {df.index[-1]}")
     cfg = FeatureConfig(mc_sims=args.mc_sims,
                         cache_path=os.path.join(args.out, "cache_bsadf_cv.json"))
@@ -200,11 +201,11 @@ def main():
     x = df.index
 
     fig, ax = plt.subplots(figsize=(11, 4.2))
-    ax.plot(x, df["Close"], color=C_BLUE, lw=1.2, label="AA close")
+    ax.plot(x, df["Close"], color=C_BLUE, lw=1.2, label=f"{asset} close")
     for i, (a, b) in enumerate(episodes):
         ax.axvspan(x[a], x[b], color=C_ORANGE, alpha=0.30,
                    label="PSY explosive episode" if i == 0 else None)
-    ax.set_title("AA hourly close with PSY (BSADF > cv95) explosive episodes")
+    ax.set_title(f"{asset} close with PSY (BSADF > cv95) explosive episodes")
     ax.legend(frameon=False)
     style_ax(ax)
     fig.tight_layout(); fig.savefig(os.path.join(args.out, "price_episodes.png"), dpi=140)
@@ -232,7 +233,7 @@ def main():
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(11, 6), sharex=True,
                                    gridspec_kw={"height_ratios": [2, 1.4]})
-    ax1.plot(x, df["Close"], color=C_BLUE, lw=1.0, label="AA close")
+    ax1.plot(x, df["Close"], color=C_BLUE, lw=1.0, label=f"{asset} close")
     for i, (a, b) in enumerate(episodes):
         ax1.axvspan(x[a], x[b], color=C_ORANGE, alpha=0.30,
                     label="explosive episode" if i == 0 else None)
@@ -274,7 +275,7 @@ def main():
     cz = causal
     summary = f"""# Bubble detection run summary
 
-Data: `{os.path.basename(args.csv)}` — {len(df)} hourly bars, {df.index[0]:%Y-%m-%d} to {df.index[-1]:%Y-%m-%d}.
+Data: `{os.path.basename(args.csv)}` — {len(df)} bars, {df.index[0]:%Y-%m-%d} to {df.index[-1]:%Y-%m-%d}.
 Label horizon: {args.horizon} bars. Walk-forward folds: {len(folds)} (purge = horizon).
 
 ## Full-sample GSADF test
@@ -311,7 +312,7 @@ accuracy = {bench['accuracy']:.3f} (base rate up = {bench['base_rate_up']:.3f}),
 ## Caveats
 - Forward labels overlap (h = {args.horizon}); Newey-West t-stats partially correct this, but per-fold sample sizes are small — treat results as a research signal, not a tradable backtest.
 - Causal identification is *selection-on-observables*: tau is causal only insofar as the stability/regime features span the confounders of the explosiveness flag.
-- One asset, one year of hourly data; upgrade path is a cross-sectional panel.
+- Single asset series; upgrade path is a cross-sectional panel.
 """
     with open(os.path.join(args.out, "summary.md"), "w") as fh:
         fh.write(summary)
