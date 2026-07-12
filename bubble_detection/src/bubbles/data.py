@@ -6,12 +6,23 @@ import pandas as pd
 
 
 def load_yf_csv(path: str) -> pd.DataFrame:
-    """Load a yfinance CSV with the (Price / Ticker / Datetime) triple header.
+    """Load a price CSV — yfinance triple-header exports or plain
+    (datetime, open, high, low, close, volume) files in any column casing.
 
     Returns a tz-aware, sorted, de-duplicated OHLCV frame with a
     ``log_close`` and log-return ``ret`` column.
     """
-    df = pd.read_csv(path, skiprows=[1, 2], index_col=0, parse_dates=True)
+    head = pd.read_csv(path, nrows=3)
+    if head.columns[0] == "Price":                       # yfinance triple header
+        df = pd.read_csv(path, skiprows=[1, 2], index_col=0, parse_dates=True)
+    else:
+        df = pd.read_csv(path)
+        dt_col = next((c for c in df.columns
+                       if c.lower() in ("datetime", "date", "timestamp", "time", "dt")),
+                      df.columns[0])
+        df[dt_col] = pd.to_datetime(df[dt_col], utc=True, format="mixed")
+        df = df.set_index(dt_col)
+        df.columns = [c.strip().capitalize() for c in df.columns]
     df.index.name = "datetime"
     df = df[~df.index.duplicated(keep="first")].sort_index()
     df = df.dropna(subset=["Close"])
