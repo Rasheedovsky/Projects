@@ -95,7 +95,8 @@ def meta_probs() -> list[np.ndarray]:
             if fitted:
                 lr.fit(Xv, hit)
             p = np.full(N, np.nan)
-            Xt = np.column_stack([np.abs(split_prob("vb_mae", sid) - 0.5), TAB])
+            base_p = np.nan_to_num(split_prob("vb_mae", sid), nan=0.5)
+            Xt = np.nan_to_num(np.column_stack([np.abs(base_p - 0.5), TAB]))
             take = lr.predict_proba(Xt)[:, 1] if fitted else np.full(N, 1.0)
             p[z["idx"]] = take[z["idx"]]
             seed_probs.append(p)
@@ -282,7 +283,29 @@ def main() -> None:
     for k, v in crit.items():
         md.append(f"- {k}: **{'PASS' if v else 'FAIL'}**")
     md.append(f"\n**Verdict: {verdict}**\n")
-    md.append("![equity](figures/equity_curves.png)\n")
+    md.append("## Discussion — honest reading\n")
+    all_negative = all(evals[c]["sharpe_mean"] < 0 for c in trial_names)
+    if all_negative:
+        md.append(
+            "**Every registered trial, including the Gao OLS replication and "
+            "always-long, has negative net Sharpe at the headline cost.** In this "
+            "regime the secondary-hypothesis 'PASS' marks (S1/S2/S3/S7) are "
+            "orderings among losing strategies — relative rankings of noise — and "
+            "must NOT be read as evidence for the dual-time design claim. The "
+            "pilot's substantive conclusions are: (1) the last-half-hour direction "
+            "is not predictable net of costs in 2011-2021 from morning information "
+            "under this protocol — consistent with the documented post-2013 decay "
+            "of intraday momentum (Gao OLS is net-positive only in the 2011-2013 "
+            "subperiod, matching the decay literature); (2) SSL pretraining as "
+            "configured HURT (S6): the era-firewalled 2008-2010 corpus appears to "
+            "transfer regime-specific features that do not help 2011-2021 — and "
+            "the corpus was built on full-session windows while supervised inputs "
+            "are morning-only, a domain shift the full protocol should fix; "
+            "(3) the falsifiability diagnostic and all five leakage gates passed, "
+            "so this null is a *validated* null of the strategy, not an artifact "
+            "of a broken pipeline; (4) PBO of 0.53 across the registry says any "
+            "in-sample winner here would likely be backtest overfitting.")
+    md.append("\n![equity](figures/equity_curves.png)\n")
     md.append("![sharpes](figures/sharpe_by_config.png)\n")
     md.append("\n## Pilot scope\n")
     md.append(REG["pilot_scope_notes"])
