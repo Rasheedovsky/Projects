@@ -17,6 +17,7 @@ import numpy as np
 import pandas as pd
 
 from . import psy, stability, bai_perron, ruptures_feats, hmm_feats
+from .ssa import rolling_ssa_denoise
 
 
 @dataclass
@@ -41,11 +42,30 @@ class FeatureConfig:
     hmm_states: int = 3
     hmm_min_history: int = 300
     hmm_refit_every: int = 50
+    hmm_max_history: int | None = None
+    hmm_filter_warm: int = 2000
+    # SSA denoising (feeds the structural-stability tests only)
+    use_ssa: bool = False
+    ssa_window: int = 168
+    ssa_max_rank: int = 8
+    ssa_var_frac: float = 0.90
+    ssa_stride: int = 1
     # controls
     mom_windows: tuple = (7, 35)
     vol_window: int = 35
     seed: int = 42
     cache_path: str | None = None
+
+    def scale_for_length(self, n: int) -> "FeatureConfig":
+        """Adapt stride/refit parameters to the sample size so large
+        intraday datasets stay tractable (feature definitions unchanged)."""
+        if n > 60000:
+            self.rup_stride, self.bp_stride, self.ssa_stride = 20, 24, 6
+            self.hmm_refit_every, self.hmm_max_history = 500, 20000
+        elif n > 15000:
+            self.rup_stride, self.bp_stride, self.ssa_stride = 10, 12, 2
+            self.hmm_refit_every, self.hmm_max_history = 150, 10000
+        return self
 
 
 def build_features(df: pd.DataFrame, cfg: FeatureConfig) -> tuple[pd.DataFrame, dict]:
@@ -74,19 +94,39 @@ def build_features(df: pd.DataFrame, cfg: FeatureConfig) -> tuple[pd.DataFrame, 
         age[t] = age[t - 1] + 1 if flag[t] == 1.0 else 0.0
     out["bubble_age"] = age
 
+    # ---- optional SSA cleaning for the structural tests ---------------------
+    # PSY tests stay on the raw series (their MC critical values assume an
+    # unfiltered random-walk null); the stability/break tests run on the
+    # SSA-cleaned level, where high-frequency noise costs them the most power.
+    y_struct = y
+    off = 0
+    if cfg.use_ssa:
+        y_clean = rolling_ssa_denoise(y, window=cfg.ssa_window,
+                                      max_rank=cfg.ssa_max_rank,
+                                      var_frac=cfg.ssa_var_frac,
+                                      stride=cfg.ssa_stride)
+        out["ssa_noise_vol"] = (pd.Series(y - y_clean, index=df.index)
+                                .rolling(cfg.vol_window).std())
+        off = cfg.ssa_window - 1                    # NaN head of the cleaned series
+        y_struct = y_clean[off:]
+
+    def _shift(a):
+        return np.concatenate([np.full(off, np.nan), a]) if off else a
+
     # ---- stability tests ---------------------------------------------------
-    cusum, cusumsq = stability.rolling_cusum(y, window=cfg.stab_window)
-    out["cusum"] = cusum
-    out["cusum_sq"] = cusumsq
-    out["chow_f"] = stability.rolling_chow(y, window=cfg.stab_window)
-    qlr_f, qlr_loc = stability.rolling_qlr(y, window=cfg.stab_window, trim=cfg.qlr_trim)
-    out["qlr_f"] = qlr_f
-    out["qlr_loc"] = qlr_loc
+    cusum, cusumsq = stability.rolling_cusum(y_struct, window=cfg.stab_window)
+    out["cusum"] = _shift(cusum)
+    out["cusum_sq"] = _shift(cusumsq)
+    out["chow_f"] = _shift(stability.rolling_chow(y_struct, window=cfg.stab_window))
+    qlr_f, qlr_loc = stability.rolling_qlr(y_struct, window=cfg.stab_window, trim=cfg.qlr_trim)
+    out["qlr_f"] = _shift(qlr_f)
+    out["qlr_loc"] = _shift(qlr_loc)
 
     # ---- multiple breaks ----------------------------------------------------
     bp_n, bp_since, bp_dmean = bai_perron.rolling_bai_perron(
-        y, window=cfg.stab_window, max_breaks=cfg.bp_max_breaks,
+        y_struct, window=cfg.stab_window, max_breaks=cfg.bp_max_breaks,
         min_seg=cfg.bp_min_seg, grid_step=cfg.bp_grid_step, stride=cfg.bp_stride)
+    bp_n, bp_since, bp_dmean = _shift(bp_n), _shift(bp_since), _shift(bp_dmean)
     out["bp_nbreaks"] = bp_n
     out["bp_since"] = bp_since
     out["bp_dmean"] = bp_dmean
@@ -102,7 +142,9 @@ def build_features(df: pd.DataFrame, cfg: FeatureConfig) -> tuple[pd.DataFrame, 
                                          n_states=cfg.hmm_states,
                                          min_history=cfg.hmm_min_history,
                                          refit_every=cfg.hmm_refit_every,
-                                         seed=cfg.seed)
+                                         seed=cfg.seed,
+                                         max_history=cfg.hmm_max_history,
+                                         filter_warm=cfg.hmm_filter_warm)
     for k, v in hmm_cols.items():
         out[k] = v
 

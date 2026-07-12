@@ -24,7 +24,17 @@ data (hourly OHLCV)
 pip install -r requirements.txt
 python run_pipeline.py                      # uses data/AA_h.csv
 python run_pipeline.py --csv path/to.csv --horizon 21 --mc-sims 200
+python run_pipeline.py --ssa --cost-bps 2   # SSA-denoised stability tests + costs
+python prepare_data.py spy_1min.csv data/SPY_h.csv --rule 1h   # resample intraday
 ```
+
+Every run now includes an **event-driven strategy backtest**: enter
+sign(τ̂) when the explosiveness flag is on AND the τ̂ 90% CI excludes zero,
+one-bar execution delay, per-side costs; compared against buy & hold and
+long-whenever-flagged over the same out-of-sample span (`strategy.png`,
+`summary.md`).  Large intraday samples are handled with chunked window
+batching, stationary-tail Monte-Carlo critical values, and auto-scaled
+strides (`FeatureConfig.scale_for_length`).
 
 First run simulates BSADF Monte-Carlo critical values (~2 min) and caches
 them in `results/cache_bsadf_cv.json`; subsequent runs take ~3 min total.
@@ -42,6 +52,8 @@ them in `results/cache_bsadf_cv.json`; subsequent runs take ~3 min total.
 | `src/bubbles/features.py` / `labels.py` | feature/label assembly |
 | `src/bubbles/walkforward.py` | purged expanding walk-forward folds |
 | `src/bubbles/causal_model.py` | CausalForestDML meta-model + RF benchmark |
+| `src/bubbles/ssa.py` | causal trailing-window SSA denoiser (`--ssa`) |
+| `src/bubbles/strategy.py` | event-driven backtest vs buy & hold |
 | `run_pipeline.py` | end-to-end orchestration, metrics, plots |
 | `docs/TESTS.md` | what each test is, its literature, and how it becomes a feature |
 | `results/` | output of the committed reference run on AA hourly data |

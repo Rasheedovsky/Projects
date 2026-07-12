@@ -38,72 +38,63 @@ def rolling_bai_perron(y: np.ndarray, window: int = 336, max_breaks: int = 3,
     nb = B.size
     START, END = 0, nb - 1
 
-    ends = np.arange(window - 1, n, stride, dtype=np.int64)
-    n_win = ends.size
-    s_obs = ends - window + 2                              # first regression obs
+    all_ends = np.arange(window - 1, n, stride, dtype=np.int64)
 
-    # --- batched segment costs C[w, i, j] = SSR(obs[B_i+1 .. B_j]) ---------
+    # node-pair structure is identical for every window (fixed offsets)
     ii, jj = np.meshgrid(np.arange(nb), np.arange(nb), indexing="ij")
     seg_len = B[jj] - B[ii]
     valid = (jj > ii) & (seg_len >= min_seg)
     vi, vj = ii[valid], jj[valid]
     n_pairs = vi.size
-    Sg = (s_obs[:, None] + (B[vi] + 1)[None, :]).ravel()
-    Eg = (s_obs[:, None] + B[vj][None, :]).ravel()
-    ssr = eng.ssr(Sg, Eg).reshape(n_win, n_pairs)
-    C = np.full((n_win, nb, nb), np.inf)
-    C[:, vi, vj] = np.where(np.isfinite(ssr), ssr, np.inf)
 
-    # --- DP across all windows simultaneously ------------------------------
-    # F[r][w, j] = min SSR of obs[0..B_j] using exactly r breaks (last at node j? no:
-    # segments end at node j).  Arg[r][w, j] = argmin previous node for backtracking.
-    F = [C[:, START, :]]                                   # r = 0
-    Args = [np.full((n_win, nb), -1, dtype=np.int64)]
-    for r in range(1, max_breaks + 1):
-        tot = F[r - 1][:, :, None] + C                     # (w, i, j)
-        Args.append(np.argmin(tot, axis=1))
-        F.append(np.min(tot, axis=1))
-
-    # BIC per break count on the full window (node END)
-    n0 = float(m_obs)
-    ssr_m = np.stack([F[r][:, END] for r in range(max_breaks + 1)], axis=1)
-    ssr_m = np.maximum(ssr_m, 1e-14)
-    p_m = np.array([(m + 1) * K_AR1 + m for m in range(max_breaks + 1)], dtype=float)
-    bic = n0 * np.log(ssr_m / n0) + p_m[None, :] * np.log(n0)
-    bic = np.where(np.isfinite(bic), bic, np.inf)
-    m_star = np.argmin(bic, axis=1)
-
-    # Backtrack the last break node for windows with >= 1 break.
-    last_break_off = np.full(n_win, -1, dtype=np.int64)
-    prev_break_off = np.full(n_win, -1, dtype=np.int64)
-    for w in range(n_win):
-        m = int(m_star[w])
-        if m == 0:
-            continue
-        node = int(Args[m][w, END])                        # last break node
-        last_break_off[w] = B[node]
-        if m >= 2:
-            prev = int(Args[m - 1][w, node])
-            prev_break_off[w] = B[prev]
-
-    # Features
     dy_mean = lambda a, b: (y[b] - y[a - 1]) / max(b - a + 1, 1)   # mean log-return
     nb_out = np.full(n, np.nan)
     since_out = np.full(n, np.nan)
     dmean_out = np.full(n, np.nan)
-    for w, e in enumerate(ends):
-        m = int(m_star[w])
-        nb_out[e] = m
-        if m == 0:
-            since_out[e] = float(m_obs)
-            dmean_out[e] = 0.0
-            continue
-        lb_abs = s_obs[w] + last_break_off[w]              # absolute obs index of break
-        since_out[e] = float(e - lb_abs)
-        seg2 = dy_mean(lb_abs + 1, e)                      # regime after last break
-        a1 = s_obs[w] + (prev_break_off[w] + 1 if m >= 2 else 0)
-        seg1 = dy_mean(a1, lb_abs)                         # regime before last break
-        dmean_out[e] = seg2 - seg1
+    n0 = float(m_obs)
+    p_m = np.array([(m + 1) * K_AR1 + m for m in range(max_breaks + 1)], dtype=float)
+
+    block = max(1, int(4e6) // max(nb * nb, 1))            # bound cost-tensor memory
+    for b0 in range(0, all_ends.size, block):
+        ends = all_ends[b0: b0 + block]
+        n_win = ends.size
+        s_obs = ends - window + 2                          # first regression obs
+
+        # --- batched segment costs C[w, i, j] = SSR(obs[B_i+1 .. B_j]) -----
+        Sg = (s_obs[:, None] + (B[vi] + 1)[None, :]).ravel()
+        Eg = (s_obs[:, None] + B[vj][None, :]).ravel()
+        ssr = eng.ssr(Sg, Eg).reshape(n_win, n_pairs)
+        C = np.full((n_win, nb, nb), np.inf)
+        C[:, vi, vj] = np.where(np.isfinite(ssr), ssr, np.inf)
+
+        # --- DP across the block's windows simultaneously ------------------
+        F = [C[:, START, :]]                               # r = 0
+        Args = [np.full((n_win, nb), -1, dtype=np.int64)]
+        for r in range(1, max_breaks + 1):
+            tot = F[r - 1][:, :, None] + C                 # (w, i, j)
+            Args.append(np.argmin(tot, axis=1))
+            F.append(np.min(tot, axis=1))
+
+        ssr_m = np.stack([F[r][:, END] for r in range(max_breaks + 1)], axis=1)
+        ssr_m = np.maximum(ssr_m, 1e-14)
+        bic = n0 * np.log(ssr_m / n0) + p_m[None, :] * np.log(n0)
+        bic = np.where(np.isfinite(bic), bic, np.inf)
+        m_star = np.argmin(bic, axis=1)
+
+        for w, e in enumerate(ends):
+            m = int(m_star[w])
+            nb_out[e] = m
+            if m == 0:
+                since_out[e] = float(m_obs)
+                dmean_out[e] = 0.0
+                continue
+            node = int(Args[m][w, END])                    # last break node
+            lb_abs = s_obs[w] + B[node]                    # absolute obs index of break
+            since_out[e] = float(e - lb_abs)
+            seg2 = dy_mean(lb_abs + 1, e)                  # regime after last break
+            prev_off = B[int(Args[m - 1][w, node])] + 1 if m >= 2 else 0
+            seg1 = dy_mean(s_obs[w] + prev_off, lb_abs)    # regime before last break
+            dmean_out[e] = seg2 - seg1
 
     # forward-fill stride gaps (causal: values come from an earlier window end)
     for arr in (nb_out, since_out, dmean_out):

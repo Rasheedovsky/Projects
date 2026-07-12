@@ -133,6 +133,29 @@ condition on the future — a classic silent leak we deliberately avoid.
 `hmm_mu`, `hmm_sig` (filtered one-step expected return and vol),
 `hmm_entropy` (regime ambiguity — spikes near transitions).
 
+## 9. SSA denoising layer (optional, `--ssa`)
+
+**What it is.** Singular Spectrum Analysis (Broomhead & King 1986;
+Golyandina et al. 2001): embed a trailing window into a Hankel trajectory
+matrix, SVD it, keep the leading (trend + dominant oscillation) components,
+reconstruct by diagonal averaging, and treat the discarded tail as noise.
+
+**How we keep it causal and honest.**
+- Only the trailing window ending at bar t is decomposed — no future data.
+- The endpoint of an SSA reconstruction is noisy (its anti-diagonal has one
+  cell), so we read the reconstruction ``endpoint_lag`` bars back from the
+  edge, pooling lag+1 cells: variance falls ~(lag+1)x for a small uniform
+  group delay (default 8 bars).
+- Windows are centered before embedding so rank selection by spectrum
+  energy is not swamped by the price level.
+- The cleaned series feeds ONLY the structural-stability tests (CUSUM,
+  Chow, QLR, Bai-Perron), where high-frequency noise costs the most power.
+  The PSY unit-root tests keep the raw series: their Monte-Carlo critical
+  values assume an unfiltered random-walk null, and pre-filtering would
+  silently change that null distribution.
+- The removed component's rolling scale becomes a feature
+  (``ssa_noise_vol``) — a microstructure-noise gauge.
+
 ---
 
 # The meta-model: Causal Random Forest (Wager & Athey 2018; Athey, Tibshirani & Wager 2019)

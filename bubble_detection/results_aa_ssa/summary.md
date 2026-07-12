@@ -1,7 +1,7 @@
 # Bubble detection run summary
 
 Data: `AA_h.csv` — 1749 bars, 2025-07-11 to 2026-07-10.
-Label horizon: 21 bars. Walk-forward folds: 5 (purge = horizon).
+Label horizon: 21 bars. Walk-forward folds: 4 (purge = horizon).
 
 ## Full-sample GSADF test
 GSADF = **2.187** vs Monte-Carlo critical values 90/95/99% = 2.275 / 2.535 / 3.175
@@ -21,45 +21,44 @@ Explosive bars (BSADF > cv95): 7.3% of the sample.
 ## Walk-forward causal forest (treatment = explosiveness flag)
 | fold | train | test | treated(train) | treated(test) | ATE on fwd ret |
 |---|---|---|---|---|---|
-| 0 | 579 | 150 | 102 | 0 | 0.00608 ± 0.00738 |
-| 1 | 729 | 150 | 102 | 0 | -0.05913 ± 0.01321 |
-| 2 | 879 | 150 | 102 | 0 | 0.05250 ± 0.03048 |
-| 3 | 1029 | 150 | 102 | 0 | 0.05202 ± 0.01274 |
-| 4 | 1179 | 150 | 102 | 16 | 0.00323 ± 0.01234 |
+| 0 | 579 | 150 | 101 | 0 | 0.00631 ± 0.01848 |
+| 1 | 729 | 150 | 101 | 0 | 0.01699 ± 0.00932 |
+| 2 | 879 | 150 | 101 | 0 | -0.00586 ± 0.01349 |
+| 3 | 1029 | 150 | 101 | 18 | -0.04295 ± 0.01846 |
 
-Pooled treated test bars: 16
-- direction hit rate of sign(tau): **0.562**
-- mean fwd 21-bar log return — sign(tau) strategy: **0.00127** (NW t = 0.11) vs always-long: -0.04706 (NW t = -1.81)
-- corr(tau, realized fwd ret): 0.915
+Pooled treated test bars: 18
+- direction hit rate of sign(tau): **0.444**
+- mean fwd 21-bar log return — sign(tau) strategy: **0.00892** (NW t = 0.76) vs always-long: -0.04010 (NW t = -1.52)
+- corr(tau, realized fwd ret): -0.976
 
 All test bars (secondary diagnostic — CATE as a conditional direction signal):
-- sign(tau) hit rate: 0.505 | corr(tau, fwd ret): 0.286 | CI excludes 0 on 57.9% of bars
+- sign(tau) hit rate: 0.603 | corr(tau, fwd ret): 0.214 | CI excludes 0 on 60.2% of bars
 
 ## Event-driven strategy backtest (out-of-sample span, 2 bps/side, 1-bar delay)
-span 2026-01-22 19:30:00+00:00 → 2026-06-26 18:30:00+00:00 (750 bars, ~1765 bars/yr) · exposure 0.9% · 1 trades · win rate 0.00
+span 2026-02-26 18:30:00+00:00 → 2026-07-01 14:30:00+00:00 (600 bars, ~1753 bars/yr) · exposure 1.8% · 3 trades · win rate 0.33
 
 | series | total log ret | ann ret | ann vol | Sharpe | max DD (log) |
 |---|---|---|---|---|---|
-| event strategy | -0.0064 | -0.015 | 0.025 | -0.59 | -0.0201 |
-| buy & hold | -0.1702 | -0.401 | 0.662 | -0.61 | -0.4812 |
-| long whenever flagged | -0.0258 | -0.061 | 0.055 | -1.10 | -0.0545 |
+| event strategy | -0.0136 | -0.040 | 0.049 | -0.80 | -0.0346 |
+| buy & hold | -0.2753 | -0.804 | 0.675 | -1.19 | -0.5847 |
+| long whenever flagged | -0.0058 | -0.017 | 0.071 | -0.24 | -0.0545 |
 
 ## Benchmark RF direction classifier (all bars, all features)
-accuracy = 0.379 (base rate up = 0.479), AUC = 0.330, n = 750
+accuracy = 0.495 (base rate up = 0.473), AUC = 0.434, n = 600
 
 ## Top feature importances (benchmark RF, fold average)
 | feature | importance |
 |---|---|
-| cusum_sq | 0.1187 |
-| qlr_loc | 0.0972 |
-| vol_35 | 0.0805 |
-| rtadf | 0.0659 |
-| mom_7 | 0.0608 |
-| qlr_f | 0.0547 |
-| mom_35 | 0.0489 |
-| rup_lvr | 0.0455 |
-| chow_f | 0.0455 |
-| rup_since | 0.0437 |
+| qlr_f | 0.1065 |
+| chow_f | 0.0936 |
+| cusum_sq | 0.0862 |
+| vol_35 | 0.0730 |
+| rtadf | 0.0643 |
+| mom_7 | 0.0638 |
+| bp_dmean | 0.0572 |
+| rup_since | 0.0452 |
+| rup_lvr | 0.0441 |
+| qlr_loc | 0.0441 |
 
 ## Caveats
 - Forward labels overlap (h = 21); Newey-West t-stats partially correct this, but per-fold sample sizes are small — treat results as a research signal, not a tradable backtest.

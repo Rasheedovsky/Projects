@@ -65,57 +65,58 @@ def rolling_cusum(y: np.ndarray, window: int = 336, warm: int = 6):
     P1, Px, Py = pref(valid), pref(xm), pref(ym)
     Pxx, Pxy = pref(xm * xm), pref(xm * ym)
 
-    ends = np.arange(window - 1, n, dtype=np.int64)
-    n_win = ends.size
-    starts = ends - window + 1                        # price-window start s
-    first_obs = starts + 1                            # first regression obs t
+    out1 = np.full(n, np.nan)
+    out2 = np.full(n, np.nan)
+    all_ends = np.arange(window - 1, n, dtype=np.int64)
     m_obs = window - 1                                # obs per window
-
-    # J[w, c] = absolute obs index of the c-th observation in window w
     offs = np.arange(m_obs)
-    J = first_obs[:, None] + offs[None, :]            # (n_win, m_obs)
+    block = max(1, int(2.5e7) // max(m_obs, 1))       # bound peak memory
+    for b0 in range(0, all_ends.size, block):
+        ends = all_ends[b0: b0 + block]
+        starts = ends - window + 1                    # price-window start s
+        first_obs = starts + 1                        # first regression obs t
 
-    # Sufficient stats of the fit on obs [first_obs, J-1] (all obs before J)
-    a, b = first_obs[:, None], J                      # sum over [a, b-1] = P[b]-P[a]
-    n0 = P1[b] - P1[a]
-    Sx = Px[b] - Px[a]
-    Sy = Py[b] - Py[a]
-    Sxx = Pxx[b] - Pxx[a]
-    Sxy = Pxy[b] - Pxy[a]
-    D = n0 * Sxx - Sx * Sx
-    xj, yj = x[J], y[J]
-    with np.errstate(divide="ignore", invalid="ignore"):
-        bhat = (n0 * Sxy - Sx * Sy) / D
-        ahat = (Sy - bhat * Sx) / n0
-        h = (Sxx - 2.0 * xj * Sx + n0 * xj * xj) / D
-        w = (yj - ahat - bhat * xj) / np.sqrt(1.0 + h)
+        # J[w, c] = absolute obs index of the c-th observation in window w
+        J = first_obs[:, None] + offs[None, :]        # (block, m_obs)
 
-    keep = offs >= (K_AR1 + warm)                     # discard warm-up residuals
-    w = np.where(keep[None, :], w, np.nan)
-    w = np.where(np.isfinite(w), w, np.nan)
-    m = np.sum(np.isfinite(w), axis=1).astype(np.float64)   # residuals per window
+        # Sufficient stats of the fit on obs [first_obs, J-1] (all obs before J)
+        a, b = first_obs[:, None], J                  # sum over [a, b-1] = P[b]-P[a]
+        n0 = P1[b] - P1[a]
+        Sx = Px[b] - Px[a]
+        Sy = Py[b] - Py[a]
+        Sxx = Pxx[b] - Pxx[a]
+        Sxy = Pxy[b] - Pxy[a]
+        D = n0 * Sxx - Sx * Sx
+        xj, yj = x[J], y[J]
+        with np.errstate(divide="ignore", invalid="ignore"):
+            bhat = (n0 * Sxy - Sx * Sy) / D
+            ahat = (Sy - bhat * Sx) / n0
+            h = (Sxx - 2.0 * xj * Sx + n0 * xj * xj) / D
+            w = (yj - ahat - bhat * xj) / np.sqrt(1.0 + h)
 
-    wbar = np.nanmean(w, axis=1, keepdims=True)
-    sig = np.sqrt(np.nansum((w - wbar) ** 2, axis=1) / np.maximum(m - 1.0, 1.0))
-    w0 = np.nan_to_num(w, nan=0.0)
+        keep = offs >= (K_AR1 + warm)                 # discard warm-up residuals
+        w = np.where(keep[None, :], w, np.nan)
+        w = np.where(np.isfinite(w), w, np.nan)
+        m = np.sum(np.isfinite(w), axis=1).astype(np.float64)  # residuals per window
 
-    # BDE CUSUM against the 5% boundary 0.948*(sqrt(m) + 2 r/sqrt(m))
-    W = np.cumsum(w0, axis=1) / np.maximum(sig, 1e-12)[:, None]
-    r = np.cumsum(np.isfinite(w), axis=1).astype(np.float64)  # residual rank
-    bound = 0.948 * (np.sqrt(m)[:, None] + 2.0 * r / np.maximum(np.sqrt(m), 1e-12)[:, None])
-    ratio = np.where(r > 0, np.abs(W) / np.maximum(bound, 1e-12), 0.0)
-    cusum_stat = ratio.max(axis=1)
+        wbar = np.nanmean(w, axis=1, keepdims=True)
+        sig = np.sqrt(np.nansum((w - wbar) ** 2, axis=1) / np.maximum(m - 1.0, 1.0))
+        w0 = np.nan_to_num(w, nan=0.0)
 
-    # CUSUM of squares deviation from its null expectation r/m
-    cw2 = np.cumsum(w0 * w0, axis=1)
-    tot = np.maximum(cw2[:, -1], 1e-12)[:, None]
-    S = cw2 / tot
-    dev = np.where(r > 0, np.abs(S - r / np.maximum(m, 1.0)[:, None]), 0.0)
-    cusumsq_stat = np.sqrt(np.maximum(m, 1.0)) * dev.max(axis=1)
+        # BDE CUSUM against the 5% boundary 0.948*(sqrt(m) + 2 r/sqrt(m))
+        W = np.cumsum(w0, axis=1) / np.maximum(sig, 1e-12)[:, None]
+        r = np.cumsum(np.isfinite(w), axis=1).astype(np.float64)  # residual rank
+        bound = 0.948 * (np.sqrt(m)[:, None] + 2.0 * r / np.maximum(np.sqrt(m), 1e-12)[:, None])
+        ratio = np.where(r > 0, np.abs(W) / np.maximum(bound, 1e-12), 0.0)
+        out1[ends] = ratio.max(axis=1)
 
-    out1 = np.full(n, np.nan); out2 = np.full(n, np.nan)
-    out1[ends] = cusum_stat
-    out2[ends] = cusumsq_stat
+        # CUSUM of squares deviation from its null expectation r/m
+        cw2 = np.cumsum(w0 * w0, axis=1)
+        tot = np.maximum(cw2[:, -1], 1e-12)[:, None]
+        S = cw2 / tot
+        dev = np.where(r > 0, np.abs(S - r / np.maximum(m, 1.0)[:, None]), 0.0)
+        out2[ends] = np.sqrt(np.maximum(m, 1.0)) * dev.max(axis=1)
+
     return out1, out2
 
 
@@ -161,24 +162,23 @@ def rolling_qlr(y: np.ndarray, window: int = 336, trim: float = 0.15,
     y = np.asarray(y, dtype=np.float64)
     n = y.size
     eng = make_ar1_engine(y)
-    ends = np.arange(window - 1, n, dtype=np.int64)
-    starts = ends - window + 1
-    s_obs = starts + 1
     m_obs = window - 1
     lo = int(np.ceil(trim * m_obs))
     hi = int(np.floor((1.0 - trim) * m_obs))
     rel = np.arange(lo, hi, cand_step, dtype=np.int64)         # relative break offsets
 
-    # Broadcast windows x candidates, flatten, one batched Chow evaluation.
-    S = np.repeat(s_obs, rel.size)
-    E = np.repeat(ends, rel.size)
-    T = (s_obs[:, None] + rel[None, :]).ravel()
-    f = _chow_f(eng, S, T, E).reshape(ends.size, rel.size)
-
-    supf = np.nanmax(f, axis=1)
-    arg = np.nanargmax(np.nan_to_num(f, nan=-np.inf), axis=1)
-    loc = rel[arg] / float(m_obs)
     out_f = np.full(n, np.nan); out_l = np.full(n, np.nan)
-    out_f[ends] = supf
-    out_l[ends] = loc
+    all_ends = np.arange(window - 1, n, dtype=np.int64)
+    block = max(1, int(1.5e7) // max(rel.size, 1))             # bound peak memory
+    for b0 in range(0, all_ends.size, block):
+        ends = all_ends[b0: b0 + block]
+        s_obs = ends - window + 2
+        # Broadcast windows x candidates, flatten, one batched Chow evaluation.
+        S = np.repeat(s_obs, rel.size)
+        E = np.repeat(ends, rel.size)
+        T = (s_obs[:, None] + rel[None, :]).ravel()
+        f = _chow_f(eng, S, T, E).reshape(ends.size, rel.size)
+        out_f[ends] = np.nanmax(f, axis=1)
+        arg = np.nanargmax(np.nan_to_num(f, nan=-np.inf), axis=1)
+        out_l[ends] = rel[arg] / float(m_obs)
     return out_f, out_l

@@ -55,7 +55,14 @@ def _filtered_probs(model, r: np.ndarray) -> np.ndarray:
 
 
 def walkforward_hmm(returns: np.ndarray, n_states: int = 3, min_history: int = 300,
-                    refit_every: int = 50, seed: int = 42):
+                    refit_every: int = 50, seed: int = 42,
+                    max_history: int | None = None, filter_warm: int = 2000):
+    """``max_history`` caps the EM training sample (rolling window) and
+    ``filter_warm`` bounds the forward-filter burn-in before each scored
+    block — filtered probabilities forget their initial condition
+    geometrically fast, so a warm start from a uniform distribution
+    ``filter_warm`` bars back is indistinguishable from filtering the full
+    history while keeping large intraday samples tractable."""
     r = np.asarray(returns, dtype=np.float64)
     n = r.size
     cols = {k: np.full(n, np.nan) for k in
@@ -64,7 +71,8 @@ def walkforward_hmm(returns: np.ndarray, n_states: int = 3, min_history: int = 3
     t0 = min_history
     while t0 < n:
         t1 = min(t0 + refit_every, n)
-        hist = r[:t0]
+        h0 = max(0, t0 - max_history) if max_history else 0
+        hist = r[h0:t0]
         scale = hist.std() if hist.std() > 0 else 1.0
         model = None
         for k in (n_states, 2):
@@ -76,8 +84,11 @@ def walkforward_hmm(returns: np.ndarray, n_states: int = 3, min_history: int = 3
             except Exception:
                 continue
         if model is not None:
-            # filter over the full history up to each bar in the block (causal)
-            probs = _filtered_probs(model, r[:t1] / scale)
+            # causal filtering, warm-started shortly before the scored block
+            w0 = max(0, t0 - filter_warm)
+            probs_seg = _filtered_probs(model, r[w0:t1] / scale)
+            probs = np.full((t1, model.n_components), np.nan)
+            probs[w0:t1] = probs_seg
             mu = model.means_.ravel() * scale
             sd = np.sqrt(model.covars_.reshape(model.n_components, -1)[:, 0]) * scale
             order = np.argsort(mu)                      # bear ... bull

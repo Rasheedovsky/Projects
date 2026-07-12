@@ -27,6 +27,7 @@ from bubbles.features import FeatureConfig, build_features
 from bubbles.labels import build_labels
 from bubbles.walkforward import purged_walkforward
 from bubbles.causal_model import fit_causal_forest, fit_direction_benchmark
+from bubbles.strategy import backtest
 from bubbles import psy
 
 # Okabe-Ito CVD-safe hues (validated): blue, orange, green, vermillion
@@ -61,6 +62,24 @@ def style_ax(ax):
         ax.spines[s].set_visible(False)
 
 
+def _bt_section(bt: dict) -> str:
+    if "error" in bt:
+        return f"skipped: {bt['error']}"
+    rows = []
+    for key, name in (("strategy", "event strategy"), ("buy_hold", "buy & hold"),
+                      ("long_in_episode", "long whenever flagged")):
+        s = bt[key]
+        rows.append(f"| {name} | {s['total_log_return']:+.4f} | {s['ann_return']:+.3f} | "
+                    f"{s['ann_vol']:.3f} | {s['sharpe']:+.2f} | {s['max_drawdown_log']:+.4f} |")
+    body = "\n".join(rows)
+    return (f"span {bt['span'][0]} → {bt['span'][1]} ({bt['bars_evaluated']} bars, "
+            f"~{bt['bars_per_year']:.0f} bars/yr) · exposure {100*bt['exposure_frac']:.1f}% · "
+            f"{bt['n_trades']} trades · win rate "
+            f"{'n/a' if not bt['n_trades'] else format(bt['win_rate'], '.2f')}\n\n"
+            "| series | total log ret | ann ret | ann vol | Sharpe | max DD (log) |\n"
+            "|---|---|---|---|---|---|\n" + body)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--csv", default=os.path.join(os.path.dirname(__file__), "data", "AA_h.csv"))
@@ -68,6 +87,9 @@ def main():
     ap.add_argument("--train-min", type=int, default=600)
     ap.add_argument("--test-size", type=int, default=150)
     ap.add_argument("--mc-sims", type=int, default=200)
+    ap.add_argument("--ssa", action="store_true", help="SSA-denoise inputs of the stability tests")
+    ap.add_argument("--cost-bps", type=float, default=2.0, help="one-way transaction cost")
+    ap.add_argument("--min-abs-tau", type=float, default=0.0, help="extra |tau| entry filter")
     ap.add_argument("--out", default=os.path.join(os.path.dirname(__file__), "results"))
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
@@ -77,8 +99,9 @@ def main():
     df = load_yf_csv(args.csv)
     asset = os.path.splitext(os.path.basename(args.csv))[0]
     print(f"Loaded {len(df)} bars: {df.index[0]} .. {df.index[-1]}")
-    cfg = FeatureConfig(mc_sims=args.mc_sims,
-                        cache_path=os.path.join(args.out, "cache_bsadf_cv.json"))
+    cfg = FeatureConfig(mc_sims=args.mc_sims, use_ssa=args.ssa,
+                        cache_path=os.path.join(args.out, "cache_bsadf_cv.json")
+                        ).scale_for_length(len(df))
     feats, meta = build_features(df, cfg)
     labels = build_labels(df, feats, horizon=args.horizon)
     print(f"Features: {list(feats.columns)}")
@@ -98,7 +121,12 @@ def main():
     data = feats.join(labels)
     usable = np.where(data[all_cols + ["fwd_ret"]].notna().all(axis=1).to_numpy())[0]
     print(f"Usable rows: {usable.size} of {len(df)}")
-    folds = purged_walkforward(usable, args.train_min, args.test_size, args.horizon)
+    # keep the fold count manageable on large samples (~8-10 test blocks)
+    test_size = max(args.test_size, usable.size // 10)
+    train_min = max(args.train_min, usable.size // 3)
+    if test_size != args.test_size or train_min != args.train_min:
+        print(f"Auto-scaled folds: train_min={train_min} test_size={test_size}")
+    folds = purged_walkforward(usable, train_min, test_size, args.horizon)
     print(f"Walk-forward folds: {len(folds)}")
     if not folds:
         raise SystemExit("Not enough data for walk-forward validation.")
@@ -175,6 +203,12 @@ def main():
             "tau_fwdret_corr": float(np.corrcoef(tau[treated_te], Y[treated_te])[0, 1]),
         })
 
+    # ---------------- event-driven strategy backtest ----------------
+    bt = backtest(df["Close"], T, tau,
+                  pred["tau_lb"].to_numpy(), pred["tau_ub"].to_numpy(),
+                  cost_bps=args.cost_bps, require_ci=True,
+                  min_abs_tau=args.min_abs_tau)
+
     imp = pd.Series(np.mean(importances, axis=0), index=all_cols).sort_values(ascending=False)
 
     metrics = {
@@ -189,6 +223,8 @@ def main():
         "folds": fold_rows,
         "benchmark_rf": bench,
         "causal_forest": causal,
+        "strategy_backtest": {k: v for k, v in bt.items() if k != "_series"},
+        "ssa": bool(args.ssa),
         "feature_importances_top10": imp.head(10).round(4).to_dict(),
     }
     with open(os.path.join(args.out, "metrics.json"), "w") as fh:
@@ -250,16 +286,14 @@ def main():
     ax2.legend(frameon=False); style_ax(ax2)
     fig.tight_layout(); fig.savefig(os.path.join(args.out, "tau_direction.png"), dpi=140)
 
-    if treated_te.sum() >= 10:
-        ti = np.where(treated_te)[0]
-        s = np.sign(tau[ti])
-        cum_strat = np.cumsum(s * Y[ti] / args.horizon)
-        cum_long = np.cumsum(Y[ti] / args.horizon)
-        fig, ax = plt.subplots(figsize=(11, 3.6))
-        ax.plot(x[ti], cum_strat, color=C_BLUE, lw=1.4, label="sign(tau) strategy")
-        ax.plot(x[ti], cum_long, color=C_ORANGE, lw=1.4, label="always long in bubble")
-        ax.set_title("Cumulative per-bar attributed log return on treated test bars "
-                     "(fwd_ret/h per bar; overlapping-label approximation)")
+    if "_series" in bt:
+        eq = bt["_series"]
+        fig, ax = plt.subplots(figsize=(11, 4.0))
+        ax.plot(eq.index, eq["strat"], color=C_BLUE, lw=1.4, label="event strategy (sign tau, CI-filtered)")
+        ax.plot(eq.index, eq["bh"], color=C_ORANGE, lw=1.4, label="buy & hold")
+        ax.plot(eq.index, eq["long_ep"], color=C_GREEN, lw=1.2, label="long whenever flagged")
+        ax.set_title(f"Cumulative log return, out-of-sample span — cost {args.cost_bps:.0f} bps/side, "
+                     "positions delayed one bar")
         ax.legend(frameon=False); style_ax(ax)
         fig.tight_layout(); fig.savefig(os.path.join(args.out, "strategy.png"), dpi=140)
 
@@ -280,7 +314,9 @@ Label horizon: {args.horizon} bars. Walk-forward folds: {len(folds)} (purge = ho
 
 ## Full-sample GSADF test
 GSADF = **{gsadf:.3f}** vs Monte-Carlo critical values 90/95/99% = {gcv[0.90]:.3f} / {gcv[0.95]:.3f} / {gcv[0.99]:.3f}
-→ explosiveness {"**detected**" if gsadf > gcv[0.95] else "not detected"} at the 5% level over the sample.
+→ explosiveness {"**detected**" if gsadf > gcv[0.95] else "not detected"} at the 5% level over the sample
+(sup-statistic cv simulated on the stationary-tail length — a lower bound for samples much longer
+than the window cap, so treat borderline rejections cautiously; per-bar flags are unaffected).
 Explosive bars (BSADF > cv95): {100*np.nanmean(T):.1f}% of the sample.
 
 ## PSY date-stamped episodes (min duration {min_dur} bars)
@@ -300,6 +336,9 @@ Pooled treated test bars: {cz.get('n_treated_test_bars', 0)}
 {f'''
 All test bars (secondary diagnostic — CATE as a conditional direction signal):
 - sign(tau) hit rate: {cz['all_bars_dir_hit_rate']:.3f} | corr(tau, fwd ret): {cz['all_bars_tau_fwdret_corr']:.3f} | CI excludes 0 on {100*cz['all_bars_ci_excludes_zero_frac']:.1f}% of bars''' if 'all_bars_dir_hit_rate' in cz else ''}
+
+## Event-driven strategy backtest (out-of-sample span, {args.cost_bps:.0f} bps/side, 1-bar delay)
+{_bt_section(bt)}
 
 ## Benchmark RF direction classifier (all bars, all features)
 accuracy = {bench['accuracy']:.3f} (base rate up = {bench['base_rate_up']:.3f}), AUC = {bench['auc']:.3f}, n = {bench['n_test']}

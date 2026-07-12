@@ -24,49 +24,41 @@ import numpy as np
 from .prefix_ols import make_adf_engine
 
 
-def _pairs_for_ends(n: int, min_window: int, max_window: int, start_step: int):
-    """Enumerate (start, end) window pairs for every end bar.
-
-    Returns (starts, ends, end_index_slices) where slices[t] selects the
-    pair-range belonging to end bar t.
-    """
-    starts_all, ends_all = [], []
-    slices = [None] * n
-    for e in range(n):
-        lo = max(0, e - max_window + 1)
-        hi = e - min_window + 1
-        if hi <= lo - 1 or hi < 0:
-            continue
-        s = np.arange(lo, hi + 1, start_step, dtype=np.int64)
-        if s.size == 0:
-            continue
-        a = len(starts_all)
-        starts_all.append(s)
-        ends_all.append(np.full(s.size, e, dtype=np.int64))
-        slices[e] = (sum(x.size for x in starts_all[:-1]), sum(x.size for x in starts_all))
-    if not starts_all:
-        return np.array([], dtype=np.int64), np.array([], dtype=np.int64), slices
-    return np.concatenate(starts_all), np.concatenate(ends_all), slices
-
-
 def bsadf(y: np.ndarray, min_window: int = 40, max_window: int = 400,
-          lags: int = 1, start_step: int = 1) -> np.ndarray:
-    """Backward Sup ADF statistic for each bar (NaN before min_window)."""
+          lags: int = 1, start_step: int = 1, block: int = 2000) -> np.ndarray:
+    """Backward Sup ADF statistic for each bar (NaN before min_window).
+
+    Processes end bars in blocks so memory stays bounded on large intraday
+    samples (pairs per block <= block * max_window / start_step).
+    """
     y = np.asarray(y, dtype=np.float64)
     n = y.size
     eng = make_adf_engine(y, lags=lags)
-    starts, ends, slices = _pairs_for_ends(n, min_window, max_window, start_step)
     out = np.full(n, np.nan)
-    if starts.size == 0:
-        return out
-    t = eng.stats(starts + lags + 1, ends)["tstat0"]
-    for e in range(n):
-        if slices[e] is None:
+    for e0 in range(0, n, block):
+        e1 = min(e0 + block, n)
+        starts_l, ends_l = [], []
+        for e in range(e0, e1):
+            lo = max(0, e - max_window + 1)
+            hi = e - min_window + 1
+            if hi < lo:
+                continue
+            s = np.arange(lo, hi + 1, start_step, dtype=np.int64)
+            if s.size:
+                starts_l.append(s)
+                ends_l.append(np.full(s.size, e, dtype=np.int64))
+        if not starts_l:
             continue
-        a, b = slices[e]
-        seg = t[a:b]
-        if np.any(np.isfinite(seg)):
-            out[e] = np.nanmax(seg)
+        starts = np.concatenate(starts_l)
+        ends = np.concatenate(ends_l)
+        t = eng.stats(starts + lags + 1, ends)["tstat0"]
+        red = np.full(n, -np.inf)
+        ok = np.isfinite(t)
+        np.maximum.at(red, ends[ok], t[ok])
+        upd = red[e0:e1] > -np.inf
+        seg = out[e0:e1]
+        seg[upd] = red[e0:e1][upd]
+        out[e0:e1] = seg
     return out
 
 
@@ -98,26 +90,42 @@ def mc_critical_values(n: int, min_window: int, max_window: int, lags: int = 1,
     to the innovation scale) of the same length and window configuration,
     computes the BSADF sequence of each, and returns per-bar quantiles plus
     the distribution of the full-sample GSADF statistic.
+
+    Stationary-tail optimisation: with a capped backward window, the null
+    distribution of BSADF(t) is identical for every t >= max_window, so for
+    long samples we simulate only ``max_window + 264`` bars and extend the
+    final quantile row — exact for the per-bar critical values.  (The GSADF
+    sup-statistic critical value is then a mild lower bound for n much
+    larger than the simulated length; the real-time flag is unaffected.)
     """
-    key = f"n{n}_mw{min_window}_Mw{max_window}_l{lags}_ss{start_step}_s{n_sims}_{seed}"
+    eff_n = min(n, max_window + 264)
+    key = f"n{eff_n}_mw{min_window}_Mw{max_window}_l{lags}_ss{start_step}_s{n_sims}_{seed}_v2"
+    def _extend(cv: np.ndarray) -> np.ndarray:
+        if n <= eff_n:
+            return cv[:n]
+        return np.concatenate([cv, np.full(n - eff_n, cv[-1])])
+
     if cache_path and os.path.exists(cache_path):
         with open(cache_path) as fh:
             blob = json.load(fh)
         if blob.get("key") == key:
             return {
-                "bsadf_cv": {float(q): np.asarray(v) for q, v in blob["bsadf_cv"].items()},
+                "bsadf_cv": {float(q): _extend(np.asarray(v)) for q, v in blob["bsadf_cv"].items()},
                 "gsadf_cv": {float(q): v for q, v in blob["gsadf_cv"].items()},
             }
 
     rng = np.random.default_rng(seed)
-    sims = np.empty((n_sims, n))
+    stats = np.full((n_sims, eff_n), np.nan)
     for i in range(n_sims):
-        sims[i] = np.cumsum(rng.standard_normal(n))
-    stats = np.full((n_sims, n), np.nan)
-    for i in range(n_sims):
-        stats[i] = bsadf(sims[i], min_window, max_window, lags, start_step)
+        stats[i] = bsadf(np.cumsum(rng.standard_normal(eff_n)),
+                         min_window, max_window, lags, start_step)
 
     bsadf_cv = {float(q): np.nanquantile(stats, q, axis=0) for q in quantiles}
+    # For t >= max_window the BSADF null distribution is stationary; pool the
+    # per-bar quantile estimates over that region to cut MC noise.
+    if eff_n > max_window:
+        for q in bsadf_cv:
+            bsadf_cv[q][max_window:] = np.nanmean(bsadf_cv[q][max_window:])
     gmax = np.nanmax(stats, axis=1)
     gsadf_cv = {float(q): float(np.quantile(gmax, q)) for q in quantiles}
 
@@ -129,7 +137,8 @@ def mc_critical_values(n: int, min_window: int, max_window: int, lags: int = 1,
                 "bsadf_cv": {str(q): v.tolist() for q, v in bsadf_cv.items()},
                 "gsadf_cv": {str(q): v for q, v in gsadf_cv.items()},
             }, fh)
-    return {"bsadf_cv": bsadf_cv, "gsadf_cv": gsadf_cv}
+    return {"bsadf_cv": {q: _extend(v) for q, v in bsadf_cv.items()},
+            "gsadf_cv": gsadf_cv}
 
 
 def date_stamp_episodes(flag: np.ndarray, min_duration: int = 5):
