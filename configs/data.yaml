@@ -1,0 +1,50 @@
+# Data contract — Phase 0. All downstream phases read these values; no magic numbers.
+
+raw:
+  csv_path: data/raw/1_min_SPY_2008-2021.csv
+  zip_path: data/raw/spy_1min_gratefuldata.zip
+  zip_sha256: 8bd52867b248359db437f2fd809ac1faafc3f69449679aae9d499423487ccd5e
+  source: kaggle:gratefuldata/intraday-stock-data-1-min-sp-500-200821 (CC0)
+  provenance_note: >
+    Interactive-Brokers-style 1-min bars (barCount/average columns). Anonymous
+    download verified 2026-07-12. Not chronologically sorted on disk.
+
+timezone:
+  # Hypothesis verified by the audit (volume-spike modal minute + 2010-05-06
+  # flash-crash trough). File clock follows ET DST at a fixed -2h offset (US
+  # Mountain wall clock). Audit hard-fails if evidence contradicts this.
+  file_offset_hours_vs_et: -2
+
+volume:
+  # Determined by audit: {1, 100}. IB reports US equity volume in lots of 100.
+  unit_multiplier: 100
+
+session:
+  rth_start_et: "09:30"
+  rth_end_et: "16:00"          # exclusive bar-label end; last 1-min bar is 15:59
+  half_day_close_et: "13:00"
+
+contract:
+  decision_time_et: "15:30:00"  # every feature timestamp strictly <= 15:30:00
+  entry_rule: next_bar_open     # enter at the 15:31 bar open
+  exit_rule: moc                # official closing print
+  feature_window_et: ["09:30", "11:00"]
+  target: sign_log_return_1530_to_1600
+
+exclusions:
+  drop_half_days: true
+  max_missing_frac_morning: 0.10        # within 09:30-11:00
+  required_intact_et: ["15:25", "16:00"] # no missing minutes in the decision/exec leg
+  halt_day_rule: pad_flag               # circuit-breaker mornings pad-flagged, not dropped
+
+eras:
+  ssl_pretrain: ["2008-01-01", "2010-12-31"]   # temporal firewall: strictly precedes all test dates
+  supervised:   ["2011-01-01", "2021-12-31"]
+  subperiods:
+    - ["2011-01-01", "2013-12-31"]
+    - ["2014-01-01", "2017-12-31"]
+    - ["2018-01-01", "2021-12-31"]
+
+costs:
+  per_side_bp_grid: [0.5, 1.0, 2.0, 3.0]
+  era_based: true   # per-era half-spread measured from data + MOC fee, Phase 8

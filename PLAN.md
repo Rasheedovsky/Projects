@@ -42,9 +42,10 @@ cross-check. **Data access is therefore not a blocker.**
 
 Facts that change the plan as written:
 
-1. **Coverage is 2008–2021, not 2008–present.** ~3,400 usable labeled days after
-   dropping half days — not ~4,300. Regime split becomes 2008–2015 vs 2016–2021.
-   Gao et al.'s sample ends 2013, so 2014–2021 remains genuine post-sample evidence.
+1. **Coverage is 2008-01-22 → 2021-05-06, not 2008–present.** Measured in the
+   Phase-0 audit: **3,316 usable labeled days** (3,347 sessions − 29 half days −
+   2 gap days), not ~4,300. Gao et al.'s sample ends 2013, so 2014–2021 remains
+   genuine post-sample evidence.
 2. **Timestamps are not ET.** Drive sessions run 07:30→~14:10 file time — consistent
    with US Mountain time (ET−2h) or a vendor offset; the Kaggle original includes
    extended hours. Phase 0 verifies the offset against known event minutes
@@ -88,8 +89,8 @@ Facts that change the plan as written:
       "pretrain on non-SPY tickers only" default survives.
    b. SPY-only SSL-era corpus (~45k volumes) — no action needed, weaker pretraining.
 3. **Supervised evaluation window.** The SSL leakage fix (§4-B2) requires pretraining
-   data to predate every CPCV test date. Proposal: **SSL era = 2008–2010, supervised
-   CPCV = 2011–2021 (~2,750 labels)**. Bonus: evaluating 2011–2021 directly tests
+   data to predate every CPCV test date. Proposal: **SSL era = 2008–2010 (737 days),
+   supervised CPCV = 2011–2021 (2,579 labels; both measured in the audit)**. Bonus: evaluating 2011–2021 directly tests
    whether nonlinear signal exists *after* the published linear anomaly began decaying
    — a stronger claim than re-finding Gao's effect in 2008–09 volatility. The Gao OLS
    replication itself still runs on all years for the classic-result table.

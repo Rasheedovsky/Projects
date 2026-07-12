@@ -1,0 +1,13 @@
+[project]
+name = "spydt"
+version = "0.1.0"
+description = "SPY dual-time 3D CNN: clock time x information time volumetric learning"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.setuptools.packages.find]
+where = ["src"]
