@@ -55,7 +55,18 @@ def _equity_stats(r: np.ndarray, bpy: float, active: np.ndarray | None = None) -
 def backtest(close: pd.Series, flag: np.ndarray, tau: np.ndarray,
              tau_lb: np.ndarray, tau_ub: np.ndarray,
              cost_bps: float = 2.0, require_ci: bool = True,
-             min_abs_tau: float = 0.0) -> dict:
+             min_abs_tau: float = 0.0, exit_mode: str = "episode",
+             max_hold: int | None = None) -> dict:
+    """exit_mode:
+      'episode' — in a position only while the explosiveness flag is on and
+                  the signal is good (original rule; very short holds).
+      'flip'    — enter on a good signal, HOLD until a good signal of the
+                  opposite sign appears (always in the market after the
+                  first signal).
+      'horizon' — enter on a good signal, hold up to ``max_hold`` bars
+                  (refreshed by same-sign signals), flip early on an
+                  opposite signal, flat when the clock runs out.
+    """
     idx = close.index
     n = len(close)
     r = np.zeros(n)
@@ -64,8 +75,32 @@ def backtest(close: pd.Series, flag: np.ndarray, tau: np.ndarray,
     good = np.isfinite(tau) & (np.abs(tau) >= min_abs_tau)
     if require_ci:
         good &= (tau_lb > 0) | (tau_ub < 0)
-    target = np.where((flag == 1.0) & good, np.sign(tau), 0.0)
-    target = np.nan_to_num(target)
+    sig = np.where((flag == 1.0) & good, np.sign(tau), 0.0)
+    sig = np.nan_to_num(sig)
+
+    if exit_mode == "episode":
+        target = sig
+    elif exit_mode == "flip":
+        target = np.zeros(n)
+        cur = 0.0
+        for t in range(n):
+            if sig[t] != 0.0:
+                cur = sig[t]
+            target[t] = cur
+    elif exit_mode == "horizon":
+        hold = max_hold or 78
+        target = np.zeros(n)
+        cur, timer = 0.0, 0
+        for t in range(n):
+            if sig[t] != 0.0:
+                cur, timer = sig[t], hold
+            elif timer > 0:
+                timer -= 1
+            else:
+                cur = 0.0
+            target[t] = cur
+    else:
+        raise ValueError(f"unknown exit_mode {exit_mode!r}")
 
     # evaluation span = where out-of-sample predictions exist at all
     te = np.where(np.isfinite(tau))[0]
