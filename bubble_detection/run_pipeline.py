@@ -69,15 +69,22 @@ def _bt_section(bt: dict) -> str:
     for key, name in (("strategy", "event strategy"), ("buy_hold", "buy & hold"),
                       ("long_in_episode", "long whenever flagged")):
         s = bt[key]
-        rows.append(f"| {name} | {s['total_log_return']:+.4f} | {s['ann_return']:+.3f} | "
-                    f"{s['ann_vol']:.3f} | {s['sharpe']:+.2f} | {s['max_drawdown_log']:+.4f} |")
+        rows.append(f"| {name} | {100*s['total_simple_return']:+.1f}% | {s['total_log_return']:+.4f} | "
+                    f"{s['ann_return']:+.3f} | {s['ann_vol']:.3f} | {s['sharpe']:+.2f} | "
+                    f"{s['sortino']:+.2f} | {s['calmar']:+.2f} | {s['max_drawdown_log']:+.4f} | "
+                    f"{s['bar_hit_rate']:.3f} |")
     body = "\n".join(rows)
+    tr = (f"trades: {bt['n_trades']} ({bt['n_long']} long / {bt['n_short']} short) · "
+          f"win rate {format(bt['win_rate'], '.2f') if bt['n_trades'] else 'n/a'} · "
+          f"profit factor {format(bt.get('profit_factor', float('nan')), '.2f')} · "
+          f"avg win {format(bt.get('avg_win_log', float('nan')), '+.4f')} / "
+          f"avg loss {format(bt.get('avg_loss_log', float('nan')), '+.4f')} (log) · "
+          f"avg duration {format(bt.get('avg_trade_bars', float('nan')), '.0f')} bars")
     return (f"span {bt['span'][0]} → {bt['span'][1]} ({bt['bars_evaluated']} bars, "
-            f"~{bt['bars_per_year']:.0f} bars/yr) · exposure {100*bt['exposure_frac']:.1f}% · "
-            f"{bt['n_trades']} trades · win rate "
-            f"{'n/a' if not bt['n_trades'] else format(bt['win_rate'], '.2f')}\n\n"
-            "| series | total log ret | ann ret | ann vol | Sharpe | max DD (log) |\n"
-            "|---|---|---|---|---|---|\n" + body)
+            f"~{bt['bars_per_year']:.0f} bars/yr) · exposure {100*bt['exposure_frac']:.1f}%\n"
+            f"{tr}\n\n"
+            "| series | total ret | total log ret | ann ret | ann vol | Sharpe | Sortino | Calmar | max DD (log) | bar hit rate |\n"
+            "|---|---|---|---|---|---|---|---|---|---|\n" + body)
 
 
 def main():
@@ -141,7 +148,10 @@ def main():
                         columns=["fold", "proba_up", "tau", "tau_lb", "tau_ub"],
                         dtype=float)
     fold_rows, importances = [], []
+    MAX_TRAIN = 60000                       # cap forest training size on huge samples
     for k, (tr, te) in enumerate(folds):
+        if len(tr) > MAX_TRAIN:
+            tr = tr[-MAX_TRAIN:]            # most recent rows (still fully pre-test)
         bm = fit_direction_benchmark(F[tr], D[tr], F[te], seed=rng_seed)
         pred.iloc[te, pred.columns.get_loc("proba_up")] = bm["proba_up"]
         pred.iloc[te, pred.columns.get_loc("fold")] = k
@@ -231,7 +241,11 @@ def main():
         json.dump(metrics, fh, indent=2, default=float)
 
     out_df = data.join(pred)
-    out_df.to_csv(os.path.join(args.out, "features_predictions.csv"))
+    if len(out_df) > 60000:
+        out_df.to_csv(os.path.join(args.out, "features_predictions.csv.gz"),
+                      compression="gzip")
+    else:
+        out_df.to_csv(os.path.join(args.out, "features_predictions.csv"))
 
     # ---------------- plots ----------------
     x = df.index

@@ -70,7 +70,7 @@ def rolling_cusum(y: np.ndarray, window: int = 336, warm: int = 6):
     all_ends = np.arange(window - 1, n, dtype=np.int64)
     m_obs = window - 1                                # obs per window
     offs = np.arange(m_obs)
-    block = max(1, int(2.5e7) // max(m_obs, 1))       # bound peak memory
+    block = max(1, int(6e6) // max(m_obs, 1))       # bound peak memory
     for b0 in range(0, all_ends.size, block):
         ends = all_ends[b0: b0 + block]
         starts = ends - window + 1                    # price-window start s
@@ -169,7 +169,7 @@ def rolling_qlr(y: np.ndarray, window: int = 336, trim: float = 0.15,
 
     out_f = np.full(n, np.nan); out_l = np.full(n, np.nan)
     all_ends = np.arange(window - 1, n, dtype=np.int64)
-    block = max(1, int(1.5e7) // max(rel.size, 1))             # bound peak memory
+    block = max(1, int(4e6) // max(rel.size, 1))             # bound peak memory
     for b0 in range(0, all_ends.size, block):
         ends = all_ends[b0: b0 + block]
         s_obs = ends - window + 2

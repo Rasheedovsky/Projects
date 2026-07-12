@@ -29,17 +29,26 @@ def bars_per_year(index: pd.DatetimeIndex) -> float:
     return (len(index) - 1) / max(span_years, 1e-9)
 
 
-def _equity_stats(r: np.ndarray, bpy: float) -> dict:
+def _equity_stats(r: np.ndarray, bpy: float, active: np.ndarray | None = None) -> dict:
     r = np.asarray(r, dtype=float)
     mu, sd = r.mean(), r.std(ddof=1) if r.size > 2 else np.nan
+    downside = float(np.sqrt(np.mean(np.minimum(r, 0.0) ** 2)))
     eq = np.cumsum(r)
     dd = eq - np.maximum.accumulate(eq)
+    mdd = float(dd.min()) if r.size else 0.0
+    ann = float(mu * bpy)
+    act = r[active] if active is not None else r
+    act = act[act != 0.0] if active is None else act
     return {
         "total_log_return": float(eq[-1]) if r.size else 0.0,
-        "ann_return": float(mu * bpy),
+        "total_simple_return": float(np.expm1(eq[-1])) if r.size else 0.0,
+        "ann_return": ann,
         "ann_vol": float(sd * np.sqrt(bpy)),
         "sharpe": float(mu / sd * np.sqrt(bpy)) if sd and np.isfinite(sd) and sd > 0 else np.nan,
-        "max_drawdown_log": float(dd.min()) if r.size else 0.0,
+        "sortino": float(mu / downside * np.sqrt(bpy)) if downside > 0 else np.nan,
+        "calmar": float(ann / abs(mdd)) if mdd < 0 else np.nan,
+        "max_drawdown_log": mdd,
+        "bar_hit_rate": float(np.mean(act > 0)) if act.size else np.nan,
     }
 
 
@@ -96,7 +105,8 @@ def backtest(close: pd.Series, flag: np.ndarray, tau: np.ndarray,
                                "bars": t - t0, "pnl_log": pnl})
             t0 = t if cur != 0.0 else None
 
-    wins = sum(1 for tr in trades if tr["pnl_log"] > 0)
+    wins = [t["pnl_log"] for t in trades if t["pnl_log"] > 0]
+    losses = [t["pnl_log"] for t in trades if t["pnl_log"] <= 0]
     out = {
         "span": [str(idx[a]), str(idx[b])],
         "bars_evaluated": int(b - a + 1),
@@ -104,11 +114,17 @@ def backtest(close: pd.Series, flag: np.ndarray, tau: np.ndarray,
         "cost_bps_per_side": cost_bps,
         "exposure_frac": float(np.mean(pos[sl] != 0.0)),
         "n_trades": len(trades),
-        "win_rate": float(wins / len(trades)) if trades else np.nan,
+        "n_long": sum(1 for t in trades if t["side"] == "long"),
+        "n_short": sum(1 for t in trades if t["side"] == "short"),
+        "win_rate": float(len(wins) / len(trades)) if trades else np.nan,
         "avg_trade_pnl_log": float(np.mean([t["pnl_log"] for t in trades])) if trades else np.nan,
-        "strategy": _equity_stats(strat_r[sl], bpy),
-        "buy_hold": _equity_stats(r[sl], bpy),
-        "long_in_episode": _equity_stats(long_ep_r[sl], bpy),
+        "avg_win_log": float(np.mean(wins)) if wins else np.nan,
+        "avg_loss_log": float(np.mean(losses)) if losses else np.nan,
+        "profit_factor": float(sum(wins) / abs(sum(losses))) if losses and sum(losses) < 0 else np.nan,
+        "avg_trade_bars": float(np.mean([t["bars"] for t in trades])) if trades else np.nan,
+        "strategy": _equity_stats(strat_r[sl], bpy, active=(pos[sl] != 0.0)),
+        "buy_hold": _equity_stats(r[sl], bpy, active=np.ones(b - a + 1, dtype=bool)),
+        "long_in_episode": _equity_stats(long_ep_r[sl], bpy, active=(lpos[sl] != 0.0)),
         "trades": trades,
         "_series": pd.DataFrame({"strat": np.cumsum(strat_r[sl]),
                                  "bh": np.cumsum(r[sl]),

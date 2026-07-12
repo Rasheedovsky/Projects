@@ -59,7 +59,10 @@ class FeatureConfig:
     def scale_for_length(self, n: int) -> "FeatureConfig":
         """Adapt stride/refit parameters to the sample size so large
         intraday datasets stay tractable (feature definitions unchanged)."""
-        if n > 60000:
+        if n > 150000:
+            self.rup_stride, self.bp_stride, self.ssa_stride = 30, 32, 8
+            self.hmm_refit_every, self.hmm_max_history = 1500, 15000
+        elif n > 60000:
             self.rup_stride, self.bp_stride, self.ssa_stride = 20, 24, 6
             self.hmm_refit_every, self.hmm_max_history = 500, 20000
         elif n > 15000:
