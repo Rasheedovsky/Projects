@@ -77,8 +77,8 @@ def main() -> None:
     n_val = max(int(len(tr_idx) * 0.15), 20)
     # enough optimizer steps that a blatant leak MUST be learned (small batch,
     # no early stop) — mirrors the unit-tested learnability configuration
-    fit_kw = dict(max_epochs=25, patience=25, batch_size=32, lr=3e-3,
-                  weight_decay=1e-3, label_smoothing=0.0, seed=0)
+    fit_kw = dict(max_epochs=50, patience=50, batch_size=16, lr=5e-3,
+                  weight_decay=1e-4, label_smoothing=0.0, seed=0)
 
     # ---- (a) shuffled labels -> chance
     b_sh = copy.deepcopy(b_ref)
