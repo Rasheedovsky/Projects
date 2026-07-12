@@ -143,11 +143,20 @@ def main() -> None:
     b_syn.y = np.where(lat >= 0, 1.0, -1.0)
     b_syn.w = np.ones_like(b_syn.w)
     bayes = float(np.mean((sig >= 0) == (lat >= 0)))
-    acc_f, n_f = _quick_fit_eval(b_syn, tr_idx, te_idx)
-    ci_f = 1.96 * np.sqrt(0.25 / n_f)
-    gate("(f) synthetic-signal positive control (soft)", acc_f - 0.5 > ci_f / 2,
-         f"pipeline recovers acc={acc_f:.3f} of a planted signal with Bayes "
-         f"acc≈{bayes:.3f} (n={n_f}); recovery above half-CI counts as pass",
+    # in-era holdout (random 15% of train days) vs cross-era test block —
+    # separates "pipeline cannot learn" from "signal does not transfer
+    # across eras under train-fit scaling"
+    perm = rng.permutation(len(tr_idx))
+    hold = tr_idx[perm[: int(0.15 * len(tr_idx))]]
+    fit_i = tr_idx[perm[int(0.15 * len(tr_idx)):]]
+    acc_in, n_in = _quick_fit_eval(b_syn, fit_i, hold)
+    acc_x, n_x = _quick_fit_eval(b_syn, tr_idx, te_idx)
+    ci_in = 1.96 * np.sqrt(0.25 / n_in)
+    gate("(f) synthetic-signal positive control (soft)", acc_in - 0.5 > ci_in / 2,
+         f"planted signal Bayes acc≈{bayes:.3f}: in-era holdout recovery "
+         f"acc={acc_in:.3f} (n={n_in}); cross-era test recovery acc={acc_x:.3f} "
+         f"(n={n_x}) — pass judged on in-era capability; cross-era transfer is "
+         "reported as a power diagnostic",
          soft=True)
 
     # ---- (d) purge + embargo canary
