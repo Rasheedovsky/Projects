@@ -1,0 +1,47 @@
+# PILOT configuration — strategy test at reduced supervised-training scale.
+# Deviations from the full publication protocol are deliberate and documented
+# in reports/results.md (fewer seeds/configs/epochs, N=6 CPCV, GAF-only).
+
+axes:
+  K: 16                # information bars in 09:30-11:00 (median day)
+  L: 32                # both axes length-normalized to L
+  l_sub: 16            # V-B sub-window image size
+  floor_buckets: 2     # min 1-min buckets per bar
+  cap_mult: 3.0        # cap = 3x expected buckets/bar
+  ffd_grid_step: 0.1
+  input_mode: ffd      # primary; volscaled = registered ablation
+
+cv:
+  n_groups: 6          # pilot CPCV: C(6,2)=15 splits -> 5 paths
+  k_test: 2
+  purge_days: 1
+  embargo_days: 5      # = vol-EWMA half-life (5 days), the longest fitted memory
+
+ssl:
+  era: ["2008-01-01", "2010-12-31"]
+  window_stride_min: 15
+  mask_ratio: 0.75
+  patch: 4             # tube patch (h=w=4), all-depth tubes
+  epochs: 30
+  batch_size: 256
+  lr: 1.0e-3
+
+train:
+  seeds: [0, 1, 2]     # pilot: 3 seeds (full protocol: 5)
+  max_epochs: 25       # pilot: reduced supervised training
+  patience: 5
+  batch_size: 256
+  lr: 5.0e-4
+  weight_decay: 1.0e-2
+  dropout: 0.4
+  label_smoothing: 0.1
+  augment:             # time-domain only, before encoding
+    jitter_sigma: 0.03
+    scale_sigma: 0.05
+  mixup: off           # registered off in pilot (semantics; see PLAN 4-D)
+  val_frac: 0.15       # tail of train fold, purged by 1 day
+
+costs:
+  per_side_bp_grid: [0.5, 1.0, 2.0, 3.0]
+  headline_bp: 1.0
+  fees_bp_per_side: 0.2   # MOC + commissions allowance on top of half-spread
