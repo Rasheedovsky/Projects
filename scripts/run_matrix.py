@@ -232,11 +232,12 @@ def _nn_task(task) -> str:
             f"epochs={res.epochs_ran} {time.time() - t0:.0f}s")
 
 
-def stage_nn(workers: int) -> None:
+def stage_nn(workers: int, only: list[str] | None = None) -> None:
     from multiprocessing import get_context
 
     tasks = []
-    for config in REG["nn_trials"]:
+    configs = [c for c in REG["nn_trials"] if not only or c in only]
+    for config in configs:
         seeds = [0] if config == "vb_shuffled" else PILOT["train"]["seeds"]
         for seed in seeds:
             for split_id in range(len(json.load(open(SPLIT_FILE)))):
@@ -255,10 +256,11 @@ if __name__ == "__main__":
     ap.add_argument("--stage", required=True,
                     choices=["bundles", "baselines", "nn"])
     ap.add_argument("--workers", type=int, default=3)
+    ap.add_argument("--configs", nargs="*", default=None)
     args = ap.parse_args()
     if args.stage == "bundles":
         stage_bundles()
     elif args.stage == "baselines":
         stage_baselines()
     else:
-        stage_nn(args.workers)
+        stage_nn(args.workers, args.configs)
