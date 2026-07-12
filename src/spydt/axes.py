@@ -2,11 +2,13 @@
 features, labels. All statistics (bar thresholds, FFD d*, scalers) are fit on
 train-fold days only and applied causally everywhere else.
 
-The information clock is a CONTINUOUS bar stream over full RTH sessions
-(threshold calibrated so the median day yields ``bars_per_day_target`` bars);
-a supervised day's info axis = the first K bars ENDING strictly inside
-[09:30, 11:00) of that day. FFD runs causally over each axis's continuous
-stream, so burn-in only affects the stream start, never individual windows.
+The information clock is a CONTINUOUS bar stream over MORNING windows only
+(09:30-11:00), concatenated across days; the threshold is calibrated so the
+median TRAIN morning yields K bars. Nothing from any day's post-11:00 tape
+can touch a feature — enforced by leakage gate (b), which corrupts all
+post-11:00 non-label minutes and asserts bit-identical features. FFD runs
+causally over each axis's continuous stream, so burn-in only affects the
+stream start, never individual windows.
 """
 from __future__ import annotations
 
@@ -90,21 +92,22 @@ def _morning_frame(day: DayData) -> pd.DataFrame:
 
 def calibrate_bar_threshold(
     days: list[DayData], train_pos: np.ndarray, *, kind: str,
-    bars_per_day_target: int, floor_buckets: int, n_calib: int = 300,
+    k_target: int, floor_buckets: int, n_calib: int = 300,
 ) -> float:
-    """Threshold so the median TRAIN day yields the target daily bar count."""
+    """Threshold so the median TRAIN morning yields k_target bars."""
     rng = np.random.default_rng(0)
     pick = rng.choice(train_pos, size=min(n_calib, len(train_pos)), replace=False)
-    windows = [_session_frame(days[i]) for i in np.sort(pick)]
+    windows = [_morning_frame(days[i]) for i in np.sort(pick)]
     return calibrate_threshold(
-        windows, kind=kind, k_target=bars_per_day_target, floor_buckets=floor_buckets
+        windows, kind=kind, k_target=k_target, floor_buckets=floor_buckets
     )
 
 
 def day_bars(day: DayData, *, kind: str, threshold: float,
              floor_buckets: int, cap_buckets: int) -> pd.DataFrame:
+    """Morning-window bars only — features may not touch post-11:00 tape."""
     return build_bars_for_window(
-        _session_frame(day), kind=kind, threshold=threshold,
+        _morning_frame(day), kind=kind, threshold=threshold,
         floor_buckets=floor_buckets, cap_buckets=cap_buckets,
     )
 
@@ -124,12 +127,10 @@ def build_bundle(
     """Assemble the full axis bundle; every fitted statistic uses train_pos only."""
     n = len(days)
     train_set = set(int(i) for i in train_pos)
-    bars_per_day_target = int(round(K * 390 / MORNING_MINUTES))
-    cap_buckets = max(int(cap_mult * 390 / bars_per_day_target), floor_buckets + 1)
+    cap_buckets = max(int(cap_mult * MORNING_MINUTES / K), floor_buckets + 1)
 
     threshold = calibrate_bar_threshold(
-        days, train_pos, kind=bar_kind,
-        bars_per_day_target=bars_per_day_target, floor_buckets=floor_buckets,
+        days, train_pos, kind=bar_kind, k_target=K, floor_buckets=floor_buckets,
     )
 
     # --- continuous streams --------------------------------------------------
@@ -159,7 +160,7 @@ def build_bundle(
         clock_r = np.diff(clock_logp, prepend=np.nan)
         info_r = np.diff(bar_logp, prepend=np.nan) if len(bar_logp) else bar_logp
         clock_t = _ewma_volscale(clock_r, halflife=5 * MORNING_MINUTES)
-        info_t = _ewma_volscale(info_r, halflife=5 * bars_per_day_target)
+        info_t = _ewma_volscale(info_r, halflife=5 * K)
         diag_d = {"d_clock": None, "d_info": None}
 
     # --- slice per day, length-normalize to L --------------------------------
@@ -234,7 +235,7 @@ def build_bundle(
     diag = {
         **diag_d,
         "threshold": threshold,
-        "bars_per_day_target": bars_per_day_target,
+        "k_target": K,
         "cap_buckets": cap_buckets,
         "median_bars_per_day": float(np.median([len(b) for b in all_bars])),
         "median_morning_bars": float(np.median(morning_count)),
