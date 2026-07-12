@@ -346,11 +346,19 @@ def main() -> None:
             "are morning-only, a domain shift the full protocol should fix; "
             "(3) the falsifiability diagnostic and the leakage gates passed — "
             "look-ahead is excluded and a gross leak is provably detectable, so "
-            "this is a *gated* null; the gates cannot rule out signal-destroying "
-            "defects, and the soft positive-control gate (f) quantifies how much "
-            "of a planted realistic-size signal the pipeline recovers; (4) the "
-            f"registry PBO of {pbo:.2f} says any in-sample winner here would "
-            "likely be backtest overfitting.")
+            "this is a *gated* null. Critically, the positive-control gate (f) "
+            "bounds the study's POWER: from a planted series-borne signal with "
+            "Bayes accuracy 0.611, the pipeline recovers only 0.531 on an "
+            "in-era holdout, and the recovery INVERTS to 0.372 on the "
+            "cross-era CPCV test block. Two consequences: (i) this pilot "
+            "would likely miss a true signal of realistic (52-56%) size, so "
+            "the null is honest but LOW-POWERED; (ii) whatever weak structure "
+            "the encodings carry is strongly era-non-stationary under "
+            "train-fit scaling — a plausible mechanism for the uniformly "
+            "~50% out-of-sample hit rates and a first-order target for the "
+            "full protocol (per-era normalization, adaptation layers); "
+            f"(4) the registry PBO of {pbo:.2f} says any in-sample winner "
+            "here would likely be backtest overfitting.")
     md.append("\n## Disclosures (execution history)\n")
     md.append(
         "- **Mid-study rerun:** a first, complete evaluation run (including all "
