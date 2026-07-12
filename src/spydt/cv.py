@@ -68,12 +68,15 @@ def paths_from_splits(n_groups: int, k_test: int) -> list[dict[int, int]]:
     return [{g: appearances[g][p] for g in range(n_groups)} for p in range(n_paths)]
 
 
-def assert_no_leakage(splits: list[Split], purge_days: int) -> None:
-    """Canary: every train index must sit >= purge_days from every test block.
+def assert_no_leakage(splits: list[Split], purge_days: int,
+                      embargo_days: int = 0) -> None:
+    """Canary: no train index inside the purge window before/around a test
+    block, nor inside the purge+embargo window after it.
 
     Raises AssertionError on violation — used by the train-on-future canary
     test, which feeds a deliberately corrupted split and expects a throw.
     """
+    after = purge_days + embargo_days
     for s in splits:
         if len(np.intersect1d(s.train_idx, s.test_idx)):
             raise AssertionError(f"split {s.split_id}: train/test overlap")
@@ -81,10 +84,10 @@ def assert_no_leakage(splits: list[Split], purge_days: int) -> None:
         blocks = np.split(t, np.where(np.diff(t) > 1)[0] + 1)
         for b in blocks:
             near = s.train_idx[
-                (s.train_idx >= b.min() - purge_days) & (s.train_idx <= b.max() + purge_days)
+                (s.train_idx >= b.min() - purge_days) & (s.train_idx <= b.max() + after)
             ]
             if len(near):
                 raise AssertionError(
-                    f"split {s.split_id}: train days {near[:5]} inside purge window "
-                    f"of test block [{b.min()}, {b.max()}]"
+                    f"split {s.split_id}: train days {near[:5]} inside the "
+                    f"purge/embargo window of test block [{b.min()}, {b.max()}]"
                 )

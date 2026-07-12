@@ -11,21 +11,22 @@ primary:
 secondary_hypotheses:
   S1_3d_vs_2d:        [vb_scratch, vb2d]        # 3D beats param-matched 2D control
   S2_dual_vs_single:  [vb_scratch, clock_only, info_only]
-  S3_crosstime_field: [vc, vb2d]                # V-C beats 2D given same content
+  S3_crosstime_field: [vc, vc2d, va]            # V-C beats 2D-on-identical-content AND no-cross-plane (va)
   S4_beats_linear:    [vb_mae, gao_ols, xgboost]
   S5_beats_sequence:  [vb_mae, minirocket]
   S6_ssl_benefit:     [vb_mae, vb_scratch]
   S7_depth_structure: [vb_scratch, vb_shuffled] # shuffled depth must hurt
 
-nn_trials:      # 3 seeds each (0,1,2) except vb_shuffled (seed 0 only)
+nn_trials:      # 3 seeds each (0,1,2)
   - vb_mae
   - vb_scratch
   - vb2d
   - vc
+  - vc2d        # v2 amendment: 2D control on identical V-C content
   - va
   - clock_only
   - info_only
-  - vb_shuffled
+  - vb_shuffled # v2 amendment: promoted from 1 seed to 3 (S7 confound fix)
 
 baseline_trials:  # deterministic (seed 0)
   - gao_ols       # r_last30 ~ r_first30 + r_on, train-fold OLS
@@ -44,5 +45,15 @@ pilot_scope_notes: |
   (15 splits, 5 paths) instead of N=10; 3 seeds instead of 5; max 25 epochs;
   GAF encoder only (DWT/MTF not run); FFD input only (vol-scaled ablation not
   run); denoise none; R(2+1)D not run; DINOv2/I3D exploratory comparisons not
-  run; imbalance bars not run as primary (Phase-1 diagnostic: 43% floor-
-  degenerate vs 20% for dollar bars).
+  run; imbalance bars not run as primary (post-fix Phase-1 diagnostic: 29.9%
+  floor-degenerate vs 7.4% for dollar bars).
+
+amendment_v2: |
+  Post-referee amendment (disclosed; all additions enter the DSR trial
+  count): vc2d added as the correct S3 identical-content 2D control (the
+  original S3 comparison used V-B content by mistake); vb_shuffled promoted
+  to 3 seeds to un-confound S7 from ensembling; S3 re-specified as
+  vc > vc2d AND vc > va (va = no-cross-plane control per PLAN Phase 2);
+  vb_mae rerun against the v2 MAE checkpoint retrained under the
+  morning-only bar construction (v1 checkpoint predated the gate-(b) fix
+  and was irreproducible from HEAD).

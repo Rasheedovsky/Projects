@@ -205,6 +205,8 @@ def _nn_task(task) -> str:
     torch.manual_seed(seed)
     if config == "vb2d":
         model = Classifier2D(in_channels=30, dropout=PILOT["train"]["dropout"])
+    elif config == "vc2d":
+        model = Classifier2D(in_channels=9, dropout=PILOT["train"]["dropout"])
     else:
         model = Classifier3D(dropout=PILOT["train"]["dropout"])
     if config == "vb_mae":
@@ -238,7 +240,7 @@ def stage_nn(workers: int, only: list[str] | None = None) -> None:
     tasks = []
     configs = [c for c in REG["nn_trials"] if not only or c in only]
     for config in configs:
-        seeds = [0] if config == "vb_shuffled" else PILOT["train"]["seeds"]
+        seeds = PILOT["train"]["seeds"]
         for seed in seeds:
             for split_id in range(len(json.load(open(SPLIT_FILE)))):
                 out = PRED_DIR / f"{config}_s{seed}_split{split_id}.npz"

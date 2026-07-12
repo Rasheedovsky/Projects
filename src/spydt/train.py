@@ -15,7 +15,8 @@ from torch.utils.data import DataLoader, Dataset
 from spydt.axes import AxisBundle
 from spydt.encode import EPS, build_va, build_vb, build_vc, build_single_axis, vb_as_2d
 
-CONSTRUCTIONS = ("vb", "vb2d", "va", "vc", "clock_only", "info_only", "vb_shuffled")
+CONSTRUCTIONS = ("vb", "vb2d", "va", "vc", "vc2d", "clock_only", "info_only",
+                 "vb_shuffled")
 
 _VB_SHUFFLE = np.array([7, 2, 9, 0, 5, 3, 8, 1, 6, 4])  # fixed depth permutation
 
@@ -32,6 +33,8 @@ def encode_one(name: str, clock: np.ndarray, info: np.ndarray, mask: np.ndarray,
         return build_va(clock, info, mask)
     if name == "vc":
         return build_vc(clock, info, mask)
+    if name == "vc2d":  # identical V-C content, 2D layout (S3 control)
+        return vb_as_2d(build_vc(clock, info, mask))
     if name == "clock_only":
         return build_single_axis(clock, l_sub)
     if name == "info_only":

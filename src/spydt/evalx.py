@@ -13,10 +13,11 @@ ANNUAL = 252
 
 
 def strategy_net_returns(prob: np.ndarray, r_exec: np.ndarray,
-                         cost_per_side_bp: float) -> np.ndarray:
-    """Daily net log returns of the sign rule at the given per-side cost."""
+                         cost_per_side_bp) -> np.ndarray:
+    """Daily net log returns of the sign rule; cost is a scalar per-side bp
+    or a per-day array (measured era costs)."""
     pos = np.where(prob >= 0.5, 1.0, -1.0)
-    return pos * r_exec - 2.0 * cost_per_side_bp * 1e-4
+    return pos * r_exec - 2.0 * np.asarray(cost_per_side_bp) * 1e-4
 
 
 def hit_rate(prob: np.ndarray, y: np.ndarray) -> float:

@@ -38,6 +38,25 @@ R_EXEC = BUNDLE["r_exec"]
 R_LABEL = BUNDLE["r_label"]
 TAB = BUNDLE["tabular"]
 N = len(DATES)
+
+
+def _measured_cost_per_side_bp() -> np.ndarray:
+    """Per-day per-side cost: half of a 1-cent spread at the 15:31 entry
+    price, plus the fees allowance from config. SPY's quoted spread has been
+    ~1 cent throughout 2011-2021."""
+    import pandas as pd
+
+    rth = pd.read_parquet("data/interim/spy_rth_et.parquet", columns=["open"])
+    t = rth.index.strftime("%H:%M")
+    entry = rth[t == "15:31"]["open"]
+    by_date = {str(d): float(p) for d, p in
+               zip(entry.index.date, entry.to_numpy())}
+    px = np.array([by_date.get(d, np.nan) for d in DATES])
+    px = np.where(np.isnan(px), np.nanmedian(px), px)
+    return 0.005 / px * 1e4 + PILOT["costs"]["fees_bp_per_side"]
+
+
+MEASURED_COST_BP = _measured_cost_per_side_bp()
 N_GROUPS = PILOT["cv"]["n_groups"]
 GROUPS = make_groups(N, N_GROUPS)
 PATHS = paths_from_splits(N_GROUPS, PILOT["cv"]["k_test"])
@@ -79,28 +98,31 @@ def path_probs(config: str) -> list[np.ndarray]:
 
 
 def meta_probs() -> list[np.ndarray]:
-    """meta_vb_mae: logistic trade filter fit on inner-val predictions."""
+    """meta_vb_mae: logistic trade filter fit once per split on the
+    seed-ENSEMBLED inner-val predictions, using that split's own bundle
+    tabular statistics (no cross-split statistic reuse)."""
     from sklearn.linear_model import LogisticRegression
 
     per_split: dict[int, np.ndarray] = {}
     for sid in range(len(SPLITS)):
-        seed_probs = []
-        for seed in PILOT["train"]["seeds"]:
-            z = np.load(PRED_DIR / f"vb_mae_s{seed}_split{sid}.npz")
-            vi, vp = z["val_idx"], z["val_prob"]
-            hit = (np.where(vp >= 0.5, 1, -1) == Y[vi]).astype(int)
-            Xv = np.column_stack([np.abs(vp - 0.5), TAB[vi]])
-            lr = LogisticRegression(max_iter=1000)
-            fitted = len(np.unique(hit)) > 1
-            if fitted:
-                lr.fit(Xv, hit)
-            p = np.full(N, np.nan)
-            base_p = np.nan_to_num(split_prob("vb_mae", sid), nan=0.5)
-            Xt = np.nan_to_num(np.column_stack([np.abs(base_p - 0.5), TAB]))
-            take = lr.predict_proba(Xt)[:, 1] if fitted else np.full(N, 1.0)
-            p[z["idx"]] = take[z["idx"]]
-            seed_probs.append(p)
-        per_split[sid] = np.nanmean(np.vstack(seed_probs), axis=0)
+        zb = np.load(f"data/tensors/bundles/split{sid}.npz")
+        tab_s = zb["tabular"]
+        zs = [np.load(PRED_DIR / f"vb_mae_s{seed}_split{sid}.npz")
+              for seed in PILOT["train"]["seeds"]]
+        vi = zs[0]["val_idx"]
+        vp = np.mean(np.vstack([z["val_prob"] for z in zs]), axis=0)
+        hit = (np.where(vp >= 0.5, 1, -1) == Y[vi]).astype(int)
+        Xv = np.column_stack([np.abs(vp - 0.5), tab_s[vi]])
+        lr = LogisticRegression(max_iter=1000)
+        fitted = len(np.unique(hit)) > 1
+        if fitted:
+            lr.fit(Xv, hit)
+        p = np.full(N, np.nan)
+        base_p = np.nan_to_num(split_prob("vb_mae", sid), nan=0.5)
+        Xt = np.nan_to_num(np.column_stack([np.abs(base_p - 0.5), tab_s]))
+        take = lr.predict_proba(Xt)[:, 1] if fitted else np.full(N, 1.0)
+        p[zs[0]["idx"]] = take[zs[0]["idx"]]
+        per_split[sid] = p
     base = {sid: split_prob("vb_mae", sid) for sid in per_split}
     out = []
     for p in PATHS:
@@ -116,7 +138,8 @@ def meta_probs() -> list[np.ndarray]:
     return out
 
 
-def net_returns(prob: np.ndarray, cost_bp: float) -> np.ndarray:
+def net_returns(prob: np.ndarray, cost_bp) -> np.ndarray:
+    """cost_bp: scalar or per-day array of per-side costs."""
     r = strategy_net_returns(prob, R_EXEC, cost_bp)
     return np.where(prob == 0.5, 0.0, r)  # exactly-0.5 = flat, no trade
 
@@ -153,6 +176,7 @@ def evaluate(config: str, paths: list[np.ndarray]) -> dict:
         "psr": psr(rc),
         "cost_curve": {c: sharpe(net_returns(cons, c))
                        for c in PILOT["costs"]["per_side_bp_grid"]},
+        "sharpe_measured_cost": sharpe(net_returns(cons, MEASURED_COST_BP)),
         "subperiods": {f"{lo[:4]}-{hi[:4]}": sharpe(rc[in_period(lo, hi)])
                        for lo, hi in SUBPERIODS},
         "consensus_returns": rc,
@@ -169,7 +193,8 @@ def main() -> None:
     trial_names = list(evals)
     Rmat = np.column_stack([evals[c]["consensus_returns"] for c in trial_names])
     n_eff = effective_trials(Rmat)
-    pbo = cscv_pbo(Rmat, s_partitions=8)
+    pbo = cscv_pbo(Rmat, s_partitions=16)   # registered S=16
+    pbo8 = cscv_pbo(Rmat, s_partitions=8)   # reference
     for c in trial_names:
         evals[c]["dsr"] = dsr(evals[c]["consensus_returns"], Rmat)
 
@@ -184,25 +209,34 @@ def main() -> None:
     hits_x = np.where(evals["xgboost"]["consensus_prob"] >= 0.5, 1, -1) == Y
     mcn = mcnemar(hits_p, hits_x)
 
-    # ---- secondary hypotheses -------------------------------------------
+    # ---- secondary hypotheses: point direction + DM significance ---------
     def sh(c):
         return evals[c]["sharpe_mean"]
 
-    S = {
-        "S1 3D beats 2D control": sh("vb_scratch") > sh("vb2d"),
-        "S2 dual beats single-axis": sh("vb_scratch") > max(sh("clock_only"),
-                                                            sh("info_only")),
-        "S3 V-C beats 2D control": sh("vc") > sh("vb2d"),
-        "S4 primary beats Gao OLS (DM p<0.05)": dm_gao[0] > 0 and dm_gao[1] < 0.05,
-        "S4b primary beats XGBoost (DM p<0.05)": dm_xgb[0] > 0 and dm_xgb[1] < 0.05,
-        "S5 primary beats MiniRocket": sh("vb_mae") > sh("minirocket"),
-        "S6 SSL pretraining helps": sh("vb_mae") > sh("vb_scratch"),
-        "S7 depth shuffle hurts": sh("vb_scratch") > sh("vb_shuffled"),
+    def versus(a: str, b: str) -> tuple[bool, float]:
+        t, p = dm_test(evals[a]["consensus_returns"], evals[b]["consensus_returns"])
+        return (sh(a) > sh(b)), (p if t > 0 else 1.0)
+
+    S: dict[str, tuple[bool, float]] = {
+        "S1 3D beats 2D control (vb_scratch > vb2d)": versus("vb_scratch", "vb2d"),
+        "S2a dual beats clock-only": versus("vb_scratch", "clock_only"),
+        "S2b dual beats info-only": versus("vb_scratch", "info_only"),
+        "S3a V-C beats identical-content 2D (vc > vc2d)": versus("vc", "vc2d"),
+        "S3b V-C beats no-cross-plane (vc > va)": versus("vc", "va"),
+        "S4 primary beats Gao OLS": versus("vb_mae", "gao_ols"),
+        "S4b primary beats XGBoost": versus("vb_mae", "xgboost"),
+        "S5 primary beats MiniRocket": versus("vb_mae", "minirocket"),
+        "S6 SSL pretraining helps": versus("vb_mae", "vb_scratch"),
+        "S7 depth shuffle hurts (3-seed matched)": versus("vb_scratch", "vb_shuffled"),
     }
 
     # ---- success criteria (pilot analogs) --------------------------------
     n_traded = int((prim["consensus_prob"] != 0.5).sum())
     ci = 1.96 * np.sqrt(0.25 / max(n_traded, 1))
+    def sig(key: str) -> bool:
+        direction, p = S[key]
+        return direction and p < 0.05
+
     crit = {
         "hit >= 52.5% with CI excluding 50%": prim["hit_mean"] >= 0.525
         and prim["hit_mean"] - ci > 0.5,
@@ -211,9 +245,12 @@ def main() -> None:
         "mean path Sharpe >= 0.8": prim["sharpe_mean"] >= 0.8,
         "DSR >= 0.95": prim["dsr"] >= 0.95,
         "PBO < 40%": pbo < 0.40,
-        "design claim S1+S2+S3": S["S1 3D beats 2D control"]
-        and S["S2 dual beats single-axis"] and S["S3 V-C beats 2D control"],
-        "beats sequence baselines (S5)": S["S5 primary beats MiniRocket"],
+        "design claim (S1, S2a, S2b, S3a, S3b all directional AND p<0.05)": all(
+            sig(k) for k in ["S1 3D beats 2D control (vb_scratch > vb2d)",
+                             "S2a dual beats clock-only", "S2b dual beats info-only",
+                             "S3a V-C beats identical-content 2D (vc > vc2d)",
+                             "S3b V-C beats no-cross-plane (vc > va)"]),
+        "beats sequence baselines (S5, p<0.05)": sig("S5 primary beats MiniRocket"),
     }
     verdict = "POSITIVE" if all(crit.values()) else "NULL (honest)"
 
@@ -243,7 +280,10 @@ def main() -> None:
     md = ["# Results — SPY dual-time 3D CNN (PILOT)\n"]
     md.append(f"**Overall verdict: {verdict}.** Registry: {len(trial_names)} trials "
               f"(effective trials from return-correlation spectrum: {n_eff:.1f}); "
-              f"CSCV PBO (S=8): **{pbo:.2f}**; headline cost {HEADLINE} bp/side.\n")
+              f"CSCV PBO: **{pbo:.2f}** (S=16; S=8 reference {pbo8:.2f}); "
+              f"headline cost {HEADLINE} bp/side flat; measured era cost "
+              f"(half of 1-cent spread at 15:31 entry + {PILOT['costs']['fees_bp_per_side']} bp fees) "
+              f"averages {MEASURED_COST_BP.mean():.2f} bp/side.\n")
     md.append("## Trial table (5 CPCV paths, net @1bp)\n")
     md.append("| trial | hit | AUC | mean path Sharpe ± sd | path Sharpes | DSR | "
               "Sortino | maxDD | exposure |")
@@ -256,12 +296,13 @@ def main() -> None:
                   f"{e['max_dd']:.3f} | {e['exposure']:.2f} |")
     md.append("\n## Cost sensitivity (consensus Sharpe)\n")
     grid = PILOT["costs"]["per_side_bp_grid"]
-    md.append("| trial | " + " | ".join(f"{c}bp" for c in grid) + " |")
-    md.append("|---|" + "---|" * len(grid))
-    for c in ["vb_mae", "vb_scratch", "vb2d", "vc", "gao_ols", "xgboost",
+    md.append("| trial | " + " | ".join(f"{c}bp" for c in grid) + " | measured |")
+    md.append("|---|" + "---|" * (len(grid) + 1))
+    for c in ["vb_mae", "vb_scratch", "vb2d", "vc", "vc2d", "gao_ols", "xgboost",
               "minirocket", "always_long"]:
         e = evals[c]
-        md.append(f"| {c} | " + " | ".join(f"{e['cost_curve'][g]:.2f}" for g in grid) + " |")
+        md.append(f"| {c} | " + " | ".join(f"{e['cost_curve'][g]:.2f}" for g in grid)
+                  + f" | {e['sharpe_measured_cost']:.2f} |")
     md.append("\n## Subperiod Sharpe (consensus @1bp)\n")
     keys = list(evals["vb_mae"]["subperiods"])
     md.append("| trial | " + " | ".join(keys) + " |")
@@ -276,9 +317,11 @@ def main() -> None:
     md.append(f"- McNemar vs XGBoost: b01={mcn[0]:.0f}, p={mcn[1]:.3f}")
     md.append(f"- Hit rate on |move| > round-trip cost days (primary): "
               f"{prim['hit_big']:.3f}")
-    md.append("\n## Secondary hypotheses\n")
-    for k, v in S.items():
-        md.append(f"- {k}: **{'PASS' if v else 'FAIL'}**")
+    md.append("\n## Secondary hypotheses (direction + HAC-DM significance)\n")
+    for k, (direction, p) in S.items():
+        tag = ("PASS (p<0.05)" if direction and p < 0.05
+               else "directional only, n.s." if direction else "FAIL")
+        md.append(f"- {k}: **{tag}** (DM p={p:.3f})")
     md.append("\n## Success criteria\n")
     for k, v in crit.items():
         md.append(f"- {k}: **{'PASS' if v else 'FAIL'}**")
@@ -301,10 +344,40 @@ def main() -> None:
             "transfer regime-specific features that do not help 2011-2021 — and "
             "the corpus was built on full-session windows while supervised inputs "
             "are morning-only, a domain shift the full protocol should fix; "
-            "(3) the falsifiability diagnostic and all five leakage gates passed, "
-            "so this null is a *validated* null of the strategy, not an artifact "
-            "of a broken pipeline; (4) PBO of 0.53 across the registry says any "
-            "in-sample winner here would likely be backtest overfitting.")
+            "(3) the falsifiability diagnostic and the leakage gates passed — "
+            "look-ahead is excluded and a gross leak is provably detectable, so "
+            "this is a *gated* null; the gates cannot rule out signal-destroying "
+            "defects, and the soft positive-control gate (f) quantifies how much "
+            "of a planted realistic-size signal the pipeline recovers; (4) the "
+            f"registry PBO of {pbo:.2f} says any in-sample winner here would "
+            "likely be backtest overfitting.")
+    md.append("\n## Disclosures (execution history)\n")
+    md.append(
+        "- **Mid-study rerun:** a first, complete evaluation run (including all "
+        "45 primary-trial fits) was executed before leakage gate (b) was first "
+        "run; the gate then caught a feature-timestamp violation (bar threshold "
+        "calibration/FFD d*/bar construction used full sessions, letting a train "
+        "day's own afternoon into its features). Everything derived was wiped and "
+        "rebuilt under the morning-only construction; the reported matrix is the "
+        "second, clean run. Recorded in git history (commits around the gate fix).\n"
+        "- **MAE v2:** the SSL checkpoint was retrained after the fix under the "
+        "corrected construction (per-window bars, era-morning threshold, "
+        "per-offset FFD lanes); the v1 checkpoint predated the fix and was "
+        "discarded as irreproducible.\n"
+        "- **Registry amendment v2 (post-referee, disclosed):** vc2d control "
+        "added (the original S3 comparison mistakenly used V-B content); "
+        "vb_shuffled promoted to 3 seeds; S3 re-specified as vc>vc2d AND vc>va. "
+        "All amended trials enter the DSR count.\n"
+        "- **Known unfixed pilot limitations:** r_on carries ~-20 bp artifacts "
+        "on ~44 quarterly ex-div days (dividend correction deferred; affects the "
+        "Gao baselines' r_on regressor and one tabular feature); MOC exit is "
+        "proxied by the 15:59 bar close (auction slippage not modeled); fitted "
+        "statistics are train-fold-only but not past-only (standard CPCV "
+        "practice; a walk-forward robustness pass is deferred to the full run); "
+        "the embargo (5 days) is justified by the ~500-observation FFD weight "
+        "window (~6 morning-days of memory) — one day short in the strictest "
+        "reading, immaterial at ~430-day groups but fixed to 6 in the full "
+        "protocol; CSCV S=16 as registered (S=8 shown for reference).")
     md.append("\n![equity](figures/equity_curves.png)\n")
     md.append("![sharpes](figures/sharpe_by_config.png)\n")
     md.append("\n## Pilot scope\n")

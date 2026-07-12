@@ -48,6 +48,18 @@ def test_paths_cover_all_groups_disjointly():
             used.add((g, sid))
 
 
+def test_canary_verifies_embargo_too():
+    splits = cpcv_splits(600, n_groups=6, k_test=2, purge_days=1, embargo_days=3)
+    assert_no_leakage(splits, purge_days=1, embargo_days=3)  # clean passes
+    bad = Split(0, splits[0].test_groups,
+                np.concatenate([splits[0].train_idx,
+                                [int(np.sort(splits[0].test_idx)[-1]) + 2]]),
+                splits[0].test_idx)
+    # a train day 2 days after a test block violates purge(1)+embargo(3)
+    with pytest.raises(AssertionError):
+        assert_no_leakage([bad], purge_days=1, embargo_days=3)
+
+
 def test_canary_catches_injected_future_leak():
     splits = cpcv_splits(600, n_groups=6, k_test=2, purge_days=1, embargo_days=3)
     assert_no_leakage(splits, purge_days=1)  # clean passes
