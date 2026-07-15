@@ -46,9 +46,14 @@ OUT = "alcoa"          # output-file prefix; becomes alcoa_eq in equity mode
 SERIES_LABEL = "price"
 
 
-def load_alcoa(series="price"):
-    df = pd.read_csv(ROOT / "data" / "AA_1year.csv", skiprows=[1, 2])
-    df = df.rename(columns={"Price": "Date"})
+def load_alcoa(series="price", csv="AA_1year.csv"):
+    path = ROOT / "data" / csv
+    head = open(path).readline()
+    if head.startswith("Price,"):  # raw yfinance export (3-row header)
+        df = pd.read_csv(path, skiprows=[1, 2])
+        df = df.rename(columns={"Price": "Date"})
+    else:                          # plain Date,Close[,Volume]
+        df = pd.read_csv(path)
     df["Date"] = pd.to_datetime(df["Date"])
     df = df.sort_values("Date").reset_index(drop=True)
     if series == "equity":
@@ -200,10 +205,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--series", choices=["price", "equity"], default="price",
                     help="equity = analyse ln(price x volume) instead of ln(price)")
+    ap.add_argument("--csv", default="AA_1year.csv", help="data file in data/")
+    ap.add_argument("--name", default="alcoa", help="output-file prefix")
     args = ap.parse_args()
+    OUT = args.name + ("_eq" if args.series == "equity" else "")
     if args.series == "equity":
-        OUT, SERIES_LABEL = "alcoa_eq", "equity (PxV)"
-    df = load_alcoa(args.series)
+        SERIES_LABEL = "equity (PxV)"
+    df = load_alcoa(args.series, args.csv)
     print(f"ALCOA [{SERIES_LABEL}] {df.Date.iloc[0].date()} -> {df.Date.iloc[-1].date()} ({len(df)} days), "
           f"last level {df.Close.iloc[-1]:.4g}", flush=True)
     peak_idx = int(df["Close"].idxmax())
