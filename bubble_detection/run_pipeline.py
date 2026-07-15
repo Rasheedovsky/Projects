@@ -128,6 +128,9 @@ def main():
     data = feats.join(labels)
     usable = np.where(data[all_cols + ["fwd_ret"]].notna().all(axis=1).to_numpy())[0]
     print(f"Usable rows: {usable.size} of {len(df)}")
+    if usable.size < 500:                    # tiny samples: relax treated-arm floor
+        from bubbles import causal_model as _cm
+        _cm.MIN_TREATED = 10
     # keep the fold count manageable on large samples (~8-10 test blocks)
     test_size = max(args.test_size, usable.size // 10)
     train_min = max(args.train_min, usable.size // 3)
@@ -289,11 +292,13 @@ def main():
                     label="explosive episode" if i == 0 else None)
     ax1.legend(frameon=False); style_ax(ax1)
     m = pred["tau"].notna()
-    ax2.fill_between(x[m], pred.loc[m, "tau_lb"], pred.loc[m, "tau_ub"],
-                     color=GRAY, alpha=0.3, label="90% CI")
-    tvals = pred.loc[m, "tau"]
-    ax2.scatter(x[m], tvals, s=6,
-                c=np.where(tvals >= 0, C_GREEN, C_VERM))
+    if m.any():
+        ax2.fill_between(x[m], pred.loc[m, "tau_lb"].astype(float),
+                         pred.loc[m, "tau_ub"].astype(float),
+                         color=GRAY, alpha=0.3, label="90% CI")
+        tvals = pred.loc[m, "tau"].astype(float)
+        ax2.scatter(x[m], tvals, s=6,
+                    c=np.where(tvals >= 0, C_GREEN, C_VERM))
     ax2.axhline(0, color=GRAY, lw=0.8)
     ax2.set_title("Causal forest tau(x): effect of explosiveness on fwd %d-bar return "
                   "(green: continuation, vermillion: reversal)" % args.horizon, fontsize=9)

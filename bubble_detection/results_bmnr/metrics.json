@@ -1,0 +1,50 @@
+{
+  "n_bars": 281,
+  "horizon": 5,
+  "gsadf_stat": 3.0243560100870535,
+  "gsadf_cv": {
+    "0.9": 2.865121029312523,
+    "0.95": 3.155405398778505,
+    "0.99": 4.268678087375059
+  },
+  "gsadf_reject_95": false,
+  "n_episodes": 0,
+  "episodes": [],
+  "bubble_bar_fraction": 0.052434456928838954,
+  "folds": [
+    {
+      "fold": 0,
+      "train": 135,
+      "test": 38,
+      "treated_train": 9,
+      "treated_test": 3,
+      "ate": NaN,
+      "ate_stderr": NaN
+    }
+  ],
+  "benchmark_rf": {
+    "n_test": 38,
+    "accuracy": 0.4473684210526316,
+    "auc": 0.5148809523809523,
+    "base_rate_up": 0.3684210526315789
+  },
+  "causal_forest": {
+    "n_treated_test_bars": 0
+  },
+  "strategy_backtest": {
+    "error": "not enough out-of-sample bars"
+  },
+  "ssa": true,
+  "feature_importances_top10": {
+    "cusum_sq": 0.1232,
+    "chow_f": 0.116,
+    "vol_21": 0.084,
+    "bp_since": 0.0749,
+    "hmm_sig": 0.0713,
+    "qlr_f": 0.0634,
+    "rtadf": 0.0616,
+    "mom_21": 0.0563,
+    "bp_dmean": 0.0546,
+    "bsadf": 0.049
+  }
+}

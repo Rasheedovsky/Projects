@@ -36,7 +36,8 @@ def main():
     args = ap.parse_args()
 
     df = load_yf_csv(args.csv)
-    cfg = FeatureConfig(cache_path=os.path.join(args.out, "cache_bsadf_cv.json"))
+    cfg = FeatureConfig(cache_path=os.path.join(args.out, "cache_bsadf_cv.json")
+                        ).scale_for_length(len(df))
     feats, meta = build_features(df, cfg)
     labels = build_labels(df, feats, horizon=args.horizon)
 
@@ -85,7 +86,9 @@ def main():
     print(f"                    rup_ncp={feats['rup_ncp'].iloc[i]:.0f} "
           f"rup_since={feats['rup_since'].iloc[i]:.0f} rup_lvr={feats['rup_lvr'].iloc[i]:+.2f} "
           f"hmm_mu={feats['hmm_mu'].iloc[i]:+.5f} hmm_sig={feats['hmm_sig'].iloc[i]:.4f} "
-          f"mom_35={feats['mom_35'].iloc[i]:+.4f} rtadf={feats['rtadf'].iloc[i]:.2f}")
+          f"{[c for c in feats.columns if c.startswith('mom_')][-1]}="
+          f"{feats[[c for c in feats.columns if c.startswith('mom_')][-1]].iloc[i]:+.4f} "
+          f"rtadf={feats['rtadf'].iloc[i]:.2f}")
     if cf:
         print(f"\nfull-sample ATE of explosiveness on fwd {args.horizon}-bar return: "
               f"{cf['ate']:+.5f} ± {cf['ate_stderr']:.5f}")
