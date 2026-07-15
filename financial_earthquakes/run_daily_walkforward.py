@@ -24,13 +24,21 @@ import pandas as pd
 from etas import ETASModel, extract_events, load_yfinance_csv
 from overnight import (extract_gap_stream, split_overnight_intraday,
                        walk_forward_daily)
-from run_analysis import C, FIGS, HERE
+import run_analysis as RA
+from run_analysis import C, HERE
 import matplotlib.pyplot as plt
+
+def _cache_for(csv_path: str) -> Path:
+    stem = Path(csv_path).stem.split("_")[0].upper()
+    return HERE / ("wf_daily.pkl" if stem == "AA" else f"wf_daily_{stem}.pkl")
+
 
 CACHE = HERE / "wf_daily.pkl"
 
 
 def get_daily_wf(csv_path: str = "AA_h.csv", use_cache: bool = True):
+    global CACHE
+    CACHE = _cache_for(csv_path)
     df = load_yfinance_csv(csv_path)
     r_intra, gaps_all = split_overnight_intraday(df)
     falls = extract_events(r_intra, "fall", 0.95)
@@ -108,7 +116,7 @@ def figure_daily(wf: pd.DataFrame, close_h: pd.Series):
     fig.suptitle("Daily walk-forward: overnight-trigger model, re-estimated "
                  "every trading day", fontweight="bold")
     fig.tight_layout()
-    fig.savefig(FIGS / "fig10_daily_wf.png", dpi=150)
+    fig.savefig(RA.FIGS / "fig10_daily_wf.png", dpi=150)
     plt.close(fig)
     print("saved figures/fig10_daily_wf.png")
 
@@ -156,7 +164,8 @@ def main(csv_path: str = "AA_h.csv"):
     close_h = df["Close"]
     figure_daily(wf, close_h)
     out = conclusion(wf, close_h)
-    res_path = HERE / "results.json"
+    res_path = HERE / ("results.json" if RA.TICKER == "AA"
+                       else f"results_{RA.TICKER}.json")
     res = json.loads(res_path.read_text()) if res_path.exists() else {}
     res["daily_walkforward"] = out
     res_path.write_text(json.dumps(res, indent=2, default=float))
@@ -164,4 +173,9 @@ def main(csv_path: str = "AA_h.csv"):
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    from run_analysis import set_ticker
+    path = sys.argv[1] if len(sys.argv) > 1 else "AA_h.csv"
+    stem = Path(path).stem
+    set_ticker(stem.split("_")[0].upper() if "_" in stem else stem.upper())
+    main(path)

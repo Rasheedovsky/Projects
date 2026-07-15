@@ -52,9 +52,19 @@ plt.rcParams.update({
 })
 
 HERE = Path(__file__).resolve().parent
+TICKER = "AA"                      # set by set_ticker(); used in labels/paths
 FIGS = HERE / "figures"
 FIGS.mkdir(exist_ok=True)
 RESULTS: dict = {}
+
+
+def set_ticker(ticker: str):
+    """Point all outputs (figure directory, labels, results file) at a
+    ticker.  'AA' keeps the original figures/ directory."""
+    global TICKER, FIGS
+    TICKER = ticker.upper()
+    FIGS = HERE / ("figures" if TICKER == "AA" else f"figures_{TICKER}")
+    FIGS.mkdir(exist_ok=True)
 
 
 def date_axis(ax, index: pd.DatetimeIndex, times=None):
@@ -143,7 +153,7 @@ def figure_events(close_h, r_h, falls, runs):
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(11, 6), sharex=True,
                                    gridspec_kw={"height_ratios": [2, 1]})
     px = close_h.values[1:]                    # align with returns
-    ax1.plot(np.arange(len(px)), px, color=C["ink2"], lw=1.4, label="AA close")
+    ax1.plot(np.arange(len(px)), px, color=C["ink2"], lw=1.4, label=f"{TICKER} close")
     fi = falls.times.astype(int) - 1
     ri = runs.times.astype(int) - 1
     ax1.scatter(fi, px[fi], marker="v", s=34, color=C["fall"], zorder=3,
@@ -151,7 +161,7 @@ def figure_events(close_h, r_h, falls, runs):
     ax1.scatter(ri, px[ri], marker="^", s=34, color=C["run"], zorder=3,
                 label=f"run events (n={runs.n})")
     ax1.set_ylabel("price ($)")
-    ax1.set_title("AA hourly price and extreme-return events ('earthquakes')")
+    ax1.set_title(f"{TICKER} hourly price and extreme-return events ('earthquakes')")
     ax1.legend(loc="upper left")
 
     ax2.bar(np.arange(len(r_h)), r_h.values, width=1.0, color=C["muted"])
@@ -829,11 +839,14 @@ def main(csv_path: str):
     wf_on = overnight_walkforward(falls_i, src, gaps_all)
     figure_overnight_wf(wf_on)
     daily_analysis(r_d)
-    (HERE / "results.json").write_text(json.dumps(RESULTS, indent=2, default=float))
+    out = "results.json" if TICKER == "AA" else f"results_{TICKER}.json"
+    (HERE / out).write_text(json.dumps(RESULTS, indent=2, default=float))
     print(f"\nresults.json written.  total {time.time() - t0:.0f}s")
 
 
 if __name__ == "__main__":
-    path = sys.argv[1] if len(sys.argv) > 1 else str(
-        HERE / "AA_h.csv")
+    path = sys.argv[1] if len(sys.argv) > 1 else str(HERE / "AA_h.csv")
+    # infer the ticker from a "<TICKER>_h.csv" filename
+    stem = Path(path).stem
+    set_ticker(stem.split("_")[0].upper() if "_" in stem else stem.upper())
     main(path)
