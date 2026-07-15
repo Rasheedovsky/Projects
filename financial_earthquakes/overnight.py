@@ -497,6 +497,7 @@ def walk_forward_overnight(events: EventData, src: GapStream,
 def walk_forward_daily(falls: EventData, runs: EventData, src_all: GapStream,
                        gaps_all: pd.DataFrame, start_days: int = 30,
                        kanpin_epochs: int = 60, kanpin_cal: int = 120,
+                       kanpin_every: int = 1, kanpin_kwargs: dict | None = None,
                        seed: int = 1, verbose_every: int = 40) -> pd.DataFrame:
     """Walk-forward with DAILY re-estimation.
 
@@ -533,11 +534,16 @@ def walk_forward_daily(falls: EventData, runs: EventData, src_all: GapStream,
         warm_r = [mr.theta[k] for k in mr.PARAM_NAMES]
         so = ETASModel(kernel="exp", use_alpha=False).fit(ev_f, seed=seed,
                                                           n_starts=3)
-        kp = KANPINOvernight(ev_f, src_w, seed=seed)
-        kp.fit(epochs=kanpin_epochs, calibrate_steps=kanpin_cal,
-               warm_eta=warm_kp_eta, verbose=False)
-        ek = kp.eta_hat
-        warm_kp_eta = np.array([ek[k] for k in OvernightETAS.PARAM_NAMES])
+        # KAN-PIN refit every `kanpin_every` days (carry parameters between)
+        if warm_kp_eta is None or (d - start_days) % kanpin_every == 0:
+            kp = KANPINOvernight(ev_f, src_w, seed=seed,
+                                 **(kanpin_kwargs or {}))
+            kp.fit(epochs=kanpin_epochs, calibrate_steps=kanpin_cal,
+                   warm_eta=warm_kp_eta, verbose=False)
+            ek = kp.eta_hat
+            warm_kp_eta = np.array([ek[k] for k in OvernightETAS.PARAM_NAMES])
+        else:
+            ek = dict(zip(OvernightETAS.PARAM_NAMES, warm_kp_eta))
         # ---- day-d forecasts at the open (gap known) ----
         def day_prob(theta, events):
             m = OvernightETAS(events, src_all)  # full streams as history

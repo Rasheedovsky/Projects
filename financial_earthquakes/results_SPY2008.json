@@ -1,0 +1,15 @@
+{
+  "days": 185,
+  "oos_total_vs_poisson": {
+    "full": 241.17623185209266,
+    "selfonly": 247.24511402355287,
+    "kanpin": 191.94662118067183
+  },
+  "oos_since_lehman": {
+    "full": 239.36760387614032,
+    "selfonly": 245.43351259968526,
+    "kanpin": 191.35517978124028
+  },
+  "wins_full": 159,
+  "wins_selfonly": 163
+}

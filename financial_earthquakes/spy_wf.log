@@ -1,0 +1,6 @@
+  day  78 (2008-05-13) gap=+0.002 P(fall)=0.04 P(run)=0.05 K_o=0.00 | cum OOS-Pois: full +1.3 self +1.3 KP +2.0
+  day 118 (2008-07-10) gap=-0.003 P(fall)=0.02 P(run)=0.03 K_o=0.00 | cum OOS-Pois: full +2.1 self +2.1 KP +2.1
+  day 158 (2008-09-05) gap=-0.006 P(fall)=0.02 P(run)=0.03 K_o=0.00 | cum OOS-Pois: full +1.7 self +1.8 KP +0.6
+  day 198 (2008-10-31) gap=-0.012 P(fall)=0.77 P(run)=0.92 K_o=0.61 | cum OOS-Pois: full +200.0 self +206.6 KP +163.2
+DONE 239s, 185 days
+TOTAL OOS-Poisson: full +241.2 | self-only +247.2 | KAN-PIN +191.9

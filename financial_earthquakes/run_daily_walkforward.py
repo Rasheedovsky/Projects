@@ -109,6 +109,11 @@ def figure_daily(wf: pd.DataFrame, close_h: pd.Series):
     roll = gauge.rolling(10, min_periods=3).mean()
     ax.plot(x, roll, color=C["ink"], lw=1.6, label="10-day average")
     ax.axhline(0, color=C["ink2"], lw=1)
+    # robust limits: a single exploding forecast (exponential gap-leverage
+    # extrapolating on an unprecedented gap) must not flatten the panel
+    lo, hi = np.quantile(gauge, [0.01, 0.99])
+    pad = 0.2 * max(abs(lo), abs(hi), 0.1)
+    ax.set_ylim(min(lo, -pad) - pad, max(hi, pad) + pad)
     ax.set_xticks(ticks); ax.set_xticklabels(dates.iloc[ticks], fontsize=8)
     ax.set_ylabel("E[extreme runs] − E[extreme falls], per day")
     ax.set_title("Directional tilt of the model (up-tail minus down-tail)")
