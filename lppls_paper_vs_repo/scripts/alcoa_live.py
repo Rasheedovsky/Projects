@@ -269,7 +269,7 @@ def main():
 def plot_scores(df, sc_trf, sc_kan, eps_all, fits_trf):
     fig, (ax, ax2) = plt.subplots(2, 1, figsize=(14, 8.5), sharex=True,
                                   gridspec_kw={"height_ratios": [2, 1.4], "hspace": 0.05})
-    ax.plot(df["Date"], df["logp"], color="black", lw=1.0, label="AA ln(price)")
+    ax.plot(df["Date"], df["logp"], color="black", lw=1.0, label=f"{OUT.upper()} ln(price)")
     theta = fits_trf[-1]
     if theta is not None:
         t = np.arange(1, W_ROLL + 1, dtype=float)
@@ -281,10 +281,10 @@ def plot_scores(df, sc_trf, sc_kan, eps_all, fits_trf):
             continue
         color = "red" if e["type"] == "positive" else "green"
         ax.axvspan(e["start"], e["end"], color=color, alpha=0.15)
-    ax.set_ylabel(f"ln(AA {SERIES_LABEL})")
+    ax.set_ylabel(f"ln({OUT.upper()} {SERIES_LABEL})")
     ax.legend(loc="upper left", fontsize=9)
     ax.grid(alpha=0.25)
-    ax.set_title("ALCOA: HLPPL bubble detection (shaded: episodes |score|>0.8 for 10+ days; "
+    ax.set_title(f"{OUT.upper().replace(chr(95),chr(45))}: HLPPL bubble detection (shaded: episodes |score|>0.8 for 10+ days; "
                  "red=positive bubble, green=negative)")
 
     ax2.plot(sc_trf["date"], sc_trf["score"], color="tab:blue", lw=1.2, label="HLPPL score")
@@ -341,13 +341,13 @@ def plot_densities(df, ens):
     ax_t.axvline(last_date, color="red", ls="-.", lw=1.2)
     ax_t.set_yticks([])
     ax_t.set_ylabel("PDF($t_c$)")
-    ax_t.set_title(f"ALCOA live indicator @ {last_date.date()} — negative-bubble fit share: "
+    ax_t.set_title(f"{OUT.upper()} live indicator @ {last_date.date()} — negative-bubble fit share: "
                    + " | ".join(conf_txt), fontsize=9.5)
     ax_p.set_xticks([])
     ax_p.set_xlabel("PDF(price$_c$)")
     plt.setp(ax_p.get_yticklabels(), visible=False)
     plt.setp(ax_t.get_xticklabels(), visible=False)
-    ax.set_ylabel(f"AA {SERIES_LABEL}")
+    ax.set_ylabel(f"{OUT.upper()} {SERIES_LABEL}")
     handles = [plt.Line2D([], [], color=c, lw=2) for c in COLORS.values()]
     ax.legend(handles, COLORS.keys(), loc="upper left", fontsize=9)
     ax.grid(alpha=0.25)
@@ -368,7 +368,7 @@ def plot_decision(sc, fc, action, reason):
     ax.set_ylim(-1.3, 1.3)
     ax.set_xlabel("trading days relative to now")
     ax.set_ylabel("Bubble Score")
-    ax.set_title(f"ALCOA — ML decision layer: {action}\n({reason})", fontsize=11)
+    ax.set_title(f"{OUT.upper()} — ML decision layer: {action}\n({reason})", fontsize=11)
     ax.legend(loc="lower left", fontsize=9)
     ax.grid(alpha=0.25)
     fig.savefig(ROOT / "results" / f"fig_{OUT}_ml_decision.png", dpi=140, bbox_inches="tight")
