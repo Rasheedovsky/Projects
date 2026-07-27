@@ -98,8 +98,8 @@ no further belief shift. Queue state after integration: EVERY source terminal.
 
 ## Cycle 4 — CHECKPOINT & STOP
 
-**Stop condition 1 (queue exhausted)** triggered: all 28 manifest sources terminal
-(`acquired` 3, `paywalled_or_keyed` 8, `no_riyadh` 6, `no_history` 1, `exhausted` 10).
+**Stop condition 1 (queue exhausted)** triggered: all 29 manifest sources terminal
+(`acquired` 3, `paywalled_or_keyed` 8, `no_riyadh` 6, `no_history` 1, `exhausted` 11).
 Cycles used: 4 of 12. Coverage of 06:00–09:00 window at ≤60-min granularity: **0.0%**
 (see gaps G001–G007). Forward collector delivered (`forward_collector.py`).
 Final report: `FINAL_REPORT.md`. All state flushed and pushed to

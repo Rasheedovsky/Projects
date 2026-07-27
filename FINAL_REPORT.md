@@ -1,7 +1,7 @@
 # FINAL REPORT — Riyadh Road-Traffic Dataset Acquisition
 
 Session 1 · 2026-07-27 (UTC) · 4 of 12 cycles used · **Stop condition 1: queue exhausted**
-(every one of the 28 tracked sources reached a terminal status).
+(every one of the 29 tracked sources reached a terminal status).
 
 ## Bottom line
 
