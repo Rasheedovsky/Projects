@@ -137,3 +137,39 @@ agents crashed on structured-output validation (schema too strict) — transcrip
 salvage workflow `wf_8e06072e-649` launched to extract found values as plain text.
 Searches for OTHER public GitHub repos logging TomTom hourly/live data: none found yet.
 Wolfram MCP: tool calls require an approval unavailable in this session — channel closed.
+
+---
+## Cycle 6 — Subagent harness failure; inline Arabic-press mining; +2 rows
+
+**Harness incident:** the deep-mining workflow's 166 tool calls ALL failed on a
+permission-handler bug (parameters stripped; confirmed by transcript inspection:
+22 permission errors, 0 search results in sampled transcript). The salvage workflow
+hit the identical bug. The Cycle-2 sweep predated the breakage and its artifacts
+remain valid. All Cycle-6 mining was therefore done inline by the main agent
+(11 searches; raw artifacts V7–V9).
+
+**New verified rows (2):**
+- 43.7% average congestion, Riyadh 2025 (TomTom via An-Nahar, 2026-06): TWO clean
+  sightings (target number absent from both queries) + cross-consistency (66 h/yr and
+  ~5 h improvement vs 2024 match TomTom's page figures; "66 hours" is embedded in the
+  An-Nahar URL slug itself). → `annahar_citing_tomtom_2025`.
+- 56 h lost, Riyadh 2024 (TomTom 9.5-km rush-hour-trip metric, via Sabq): the value
+  appears in the returned link's indexed page TITLE (artifact-grade, not summarizer
+  prose). Distinct methodology from tomtom.com's 71.1 h (10-km round trips, 2026
+  edition) — both retained under separate source_names/definitions. → `sabq_citing_tomtom_2024`.
+
+**Rejected / excluded (logged, never written):**
+- "INRIX 2024: Riyadh 123 hours, rank 31" — PROVEN query-echo contamination: the
+  verification pass literally said "based on your query mentioning rank 31 and
+  '123 hours', it appears..."; also contradicts INRIX 2024 global #1 (Istanbul 105 h).
+  Methodological note recorded: never verify a value with a query containing that value.
+- Central-Riyadh peak speeds "26 km/h morning / 36 km/h evening (TomTom report, 2022)" —
+  three clean-query reproductions but NO pinnable source URL in any pass; excluded
+  (schema requires source_url). Logged as the strongest morning-peak lead; candidate
+  carrier: alweeam.com.sa/1015528/2024.
+- TomTom 2022/2023 edition Riyadh values: still not surfaced (queries 1–3) → G002 stands.
+
+**Rows added: 2 (total 601).**
+**Bayesian update:** commercial_api two more successes → Beta(6,9); p 0.31 → 0.40.
+gov_portal/academic_repo unchanged. Subagent channel: unusable for the remainder of
+the session (harness bug); inline-only operations.

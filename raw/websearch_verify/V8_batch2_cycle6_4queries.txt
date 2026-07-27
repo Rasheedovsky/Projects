@@ -1,0 +1,28 @@
+RAW WebSearch tool outputs, saved verbatim (consolidated batch 2, Cycle 6 — verification pass). Main agent,
+2026-07-27 ~20:1x UTC.
+
+=== QUERY 6 (ARABIC, CONTAINS the number 43.7 — contaminated, NOT counted as sighting):
+الرياض نسبة الازدحام "43.7" توم توم 2025
+OUTCOME: repeated "بلغت نسبة الازدحام المتوسطة في الرياض 43.7% عام 2025" + "يخسر السائق في الرياض نحو 66 ساعة
+سنوياً في أوقات الذروة وحدها. هذا الرقم يمثل تحسناً بنحو خمس ساعات مقارنة بعام 2024" [improvement of ~5 hours vs
+2024 — cross-matches TomTom 5 h 06 m] + fuel consumption up to 29% higher. Top link: annahar.com/economy/316355.
+NOT COUNTED for verification because the query contained the target number (echo hazard).
+
+=== QUERY 7 (ARABIC, contains "26"): الرياض متوسط السرعة وسط المدينة ساعات الذروة الصباحية "26" كيلومتر
+OUTCOME: "وفقًا لتقرير شركة توم توم الصادر عام 2022، فإن متوسط السرعات في وسط مدينة الرياض ... تبلغ 26 كيلومترًا
+في ساعات الذروة الصباحية و36 كيلومترًا في ساعات الذروة المسائية" [per TomTom report issued 2022: 26 km/h morning
+peak, 36 km/h evening peak, central Riyadh]. Links: saudiauto/syarah speed-limit pages, alweeam.com.sa
+heatmap article (تعرف على ساعات الازدحام المروري في الرياض.. "خريطة حرارية", 2024), kapsarc, wikipedia.
+Query contained "26" → partially contaminated; attribution URL still not pinnable.
+
+=== QUERY 8 (CONTAINS "123 hours" — ECHO-CONTAMINATION TEST): INRIX scorecard Riyadh "123 hours" OR "hours lost" 2024 rank 31
+OUTCOME: summarizer echoed the query back: "based on your query mentioning rank 31 and '123 hours', it appears
+Riyadh was ranked 31st ... with 123 hours" — CONFIRMED CONTAMINATION (the '123 hours' claim originates from
+nothing visible; Istanbul 105 h global #1 in same results). VALUE PERMANENTLY REJECTED.
+
+=== QUERY 9 (ARABIC, clean): النهار الرياض مبادرة ساعات العمل المرنة 66 ساعة مهدرة ازدحام تفاصيل
+OUTCOME: confirmed An-Nahar article + SPA (spa.gov.sa/N2605308) + sabq.org/article/qzVBFf1 + aawsat:
+initiative by Royal Commission for Riyadh City from 2026-06-02, 6 work sites (KAFD, Digital City, Diplomatic
+Quarter, Laysen Valley, Granada Business, Roshn Front), 50+ entities, flexible windows 05:30-09:30 / 07:00-11:00.
+"أزمة ازدحام يخسر فيها السائق نحو 66 ساعة سنوياً" [66 h/yr — third artifact-consistent sighting].
+43.7% NOT repeated in this pass.

@@ -1,0 +1,33 @@
+RAW WebSearch tool outputs, saved verbatim (consolidated batch 3, Cycle 6 — clean re-sight pass; target
+numbers deliberately OMITTED from queries). Main agent, 2026-07-27 ~20:2x UTC.
+
+=== QUERY 10 (ARABIC, CLEAN — no numbers in query):
+مبادرة ساعات العمل المرنة الرياض مؤشر توم توم نسبة الازدحام المتوسطة عام 2025 النهار
+OUTCOME — CLEAN SECOND SIGHTING of 43.7%:
+"بحسب مؤشر توم توم (TomTom)، بلغت نسبة الازدحام المتوسطة في الرياض 43.7% عام 2025، ويخسر السائق فيها نحو 66 ساعة
+سنوياً في أوقات الذروة وحدها."
+[transl: per the TomTom index, the average congestion level in Riyadh reached 43.7% in 2025, and a driver
+there loses about 66 hours annually in peak times alone]
+Links: aawsat.com/…/5279846 (بدء تنفيذ مبادرة ساعات العمل المرنة في الرياض), sayidaty.net, sabq.org/article/qzVBFf1,
+annahar.com/economy/316355 (المصدر الحامل للقيمة), spa.gov.sa/N2605308, sa.arabisklondon.com, tagteyat.com,
+thesauditimes.net.
+VERDICT: 43.7% (2025, TomTom via An-Nahar) = two clean sightings + internal cross-consistency (66 h; ~5 h
+improvement vs 2024) → PASSES verify gate.
+
+=== QUERY 11 (ARABIC, CLEAN — no numbers in query):
+متوسط السرعات وسط مدينة الرياض ساعات الذروة الصباحية والمسائية تقرير توم توم كيلومترا
+OUTCOME:
+(a) third clean reproduction of the peak-speed claim: "متوسط السرعات في وسط مدينة الرياض خلال ساعات الذروة
+الصباحية والمسائية يتراوح بين 26 و36 كيلومتراً في الساعة على الترتيب" — attribution "تقرير توم توم" but STILL no
+pinnable URL in any pass → EXCLUDED from CSV (logged as unattributed lead; candidate carrier:
+alweeam.com.sa/1015528/2024 heatmap article).
+(b) NEW VALUE, artifact-grade (value appears in the indexed page TITLE of a returned link, not only in
+summarizer prose): sabq.org/saudia/dl5qk8spdg — title:
+"في 2024.. سكان الرياض يفقدون 56 ساعة في الزحام المروري"
+[transl: In 2024, Riyadh residents lose 56 hours to traffic congestion]
+Summary adds: "وفقاً لمؤشر الزحام الذي أصدره موقع توم توم ... فقد سكان الرياض 56 ساعة في عام 2024 بسبب الزحام
+المروري، ويعكس هذا المقياس عدد الساعات التي يقضيها السائق في رحلة مسافتها 9.5 كيلومتر خلال ساعات الذروة الصباحية
+والمسائية" [metric = hours spent by a driver on a 9.5 km trip during morning+evening rush hours].
+NOTE: differs from tomtom.com current-page 2024 figure (71 h 06 m, 10 km round-trip methodology, 2026
+edition) — different TomTom edition/methodology (2025 edition, city-specific 9.5 km typical trip). Both
+retained in dataset under distinct source_names and congestion_definitions.

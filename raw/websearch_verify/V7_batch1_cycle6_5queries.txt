@@ -1,0 +1,39 @@
+RAW WebSearch tool outputs, saved verbatim (consolidated batch 1, Cycle 6). Main agent, 2026-07-27 ~20:0x UTC.
+Deep-mining workflow agents were broken (tool-permission harness bug; zero searches executed) — these are the
+main agent's own replacement queries.
+
+=== QUERY 1: TomTom traffic index 2022 Riyadh congestion level travel time rank
+OUTCOME: no 2022 Riyadh values visible. Summary stated: "the results primarily show more recent data from
+2025 and 2026 rather than specifically 2022 data ... don't contain specific 2022 data for Riyadh".
+Links included tomtom.com/traffic-index/city/riyadh, /ranking/, /about/, facebook socalfilipinos post.
+
+=== QUERY 2: TomTom traffic index 2023 Riyadh travel time per 10 km hours lost rush hour
+OUTCOME: no 2023 Riyadh values visible. Summary: "The 13th edition of the TomTom Traffic Index was released
+in January 2024, providing data ... on 387 cities in 55 countries throughout 2023 ... I was unable to locate
+the specific 2023 figures for Riyadh". Links included tomtom.com newsroom press releases
+(major-traffic-trends-shaping-cities-globally-in-2023), navit.com blog, facebook ksaexpatsdotcom post
+("Riyadh ranks 267th worldwide" — year/figures not visible).
+
+=== QUERY 3: "Riyadh ranks 267th" TomTom average speed travel time
+OUTCOME: rank-267 post confirmed to exist (facebook.com/ksaexpatsdotcom/posts/according-to-statistics-from-
+the-tomtom-website-riyadh-ranks-267th-worldwide-in-/1038966134934801/) but "specific details about average
+speed and travel time weren't fully displayed in the search result". No values extracted.
+
+=== QUERY 4 (ARABIC): مؤشر توم توم الازدحام المروري الرياض نسبة متوسط السرعة
+OUTCOME — VALUES SURFACED (summarizer text, links list included annahar.com article):
+"بلغت نسبة الازدحام المتوسطة في الرياض 43.7% عام 2025، ويخسر السائق فيها نحو 66 ساعة سنوياً في أوقات الذروة وحدها."
+[transl: average congestion level in Riyadh reached 43.7% in 2025; a driver loses ~66 hours annually in peak
+times alone]
+"متوسط السرعات في وسط مدينة الرياض خلال ساعات الذروة الصباحية والمسائية يتراوح بين 26 و36 كيلومترًا في الساعة على الترتيب."
+[transl: average speeds in central Riyadh during morning and evening peak hours range between 26 and 36 km/h
+respectively] — NO attributable URL for this sentence.
+Key link: https://www.annahar.com/economy/316355/... (URL slug contains "66-ساعة-مهدرة-سنويا" = "66 hours
+wasted annually" — artifact-grade for the 66 h figure). Also aetoswire.com Arabic TomTom index release,
+mot.gov.sa monthly traffic report page (56 million trips in March — trip counts, not congestion), kapsarc.org
+congestion-pricing paper, meeem.sa, z7ma.com, asbar.com report 464.
+
+=== QUERY 5: INRIX Riyadh hours lost congestion scorecard 2023 OR 2024 delay
+OUTCOME: summary claimed "According to INRIX's 2024 scorecard, Riyadh had 123 hours lost in congestion" —
+UNATTRIBUTED to any visible page text, and contradicts INRIX 2024's own global #1 (Istanbul 105 h, confirmed
+in links facebook.com/INRIXinc post + ftnnews PDF). Riyadh city page inrix.com/scorecard-city/?city=Riyadh&index=31
+present in links. VALUE REJECTED (see V8 for the echo-contamination confirmation).
