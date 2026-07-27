@@ -1,0 +1,30 @@
+Cycle 7 inline hunt (main agent, 2026-07-27 ~20:0x-20:4x UTC) — non-TomTom hourly sources for Riyadh.
+~16 searches EN+AR. Workflow fan-outs unusable (load-dependent permission-handler bug stripped tool
+params on all 8 hunt agents; single-agent probe worked — evidence in raw/websearch_hunt2/agent_*.txt
+which contain only InputValidationError blocks).
+
+NEGATIVE RESULTS (families exhausted):
+- Uber Movement: discontinued 2023; coverage was 13 US + 38 world cities (London, Sao Paulo, Bangalore,
+  NYC, Seattle, Cincinnati, Nairobi, Cairo, Bristol...). NO Riyadh evidence in any result. MENA presence
+  = ride service only. GitHub repos found are analysis code, not data mirrors with ME cities.
+- Git-scraping repos logging live traffic (TomTom live/HERE/waze) with Riyadh: none found. Only a
+  Germany-only R gist (863fa0e0863ed5728cd01aaea9660101, cloned) confirming the live API pattern
+  api.midway.tomtom.com/ranking/live/<CC>%2F<city> with TrafficIndexLive/UpdateTime fields.
+- HERE jamFactor public logs incl. Riyadh: none found.
+- Waze for Cities: Riyadh feed partner-gated; no public download. ActiveConclusion Waze city file has
+  no Riyadh (verified in clone).
+- bwandowando: Kaggle-only, no GitHub mirror of the TomTom live scrape.
+- graphhopper/open-traffic-collection, radandreicristian/traffic-datasets, AI-SMART-tt (cloned): no
+  Saudi/Riyadh sources (METR-LA/PeMS/Guangzhou/EU only). aldilaff/Saudi-Arabia-APIs (cloned): zero
+  traffic APIs.
+- z7ma.com: live-only Riyadh congestion site (5 zones + متوسط) — no public API/history/GitHub found.
+- Akbar-Couture-Duranton-Storeygard global speed DB (1,200+ cities, 152 countries, Google-directions
+  simulated trips): exists, Riyadh plausibly included, but no GitHub mirror surfaced; replication
+  archives (AEA/openICPSR) are network-blocked. LEAD for network-open re-run.
+- ActiveConclusion tomtom_trafic_index_historical.csv: strict subset of main file for Riyadh
+  (367 rows, 2019-12-30..2020-12-31; 0 new dates; 0 conflicts). No new data.
+- Hour-of-day congestion numbers for Riyadh in press (EN+AR): only qualitative windows (peaks 7-9am,
+  4-7pm; worst 4-6pm; smooth 12-5am workdays) — no numeric hourly values anywhere indexable.
+CONCLUSION: multi-year hourly Riyadh speed/congestion data exists ONLY behind: TomTom Move (paid),
+HERE API (keyed), INRIX (paid), Kaggle scrape (account+network), Wayback (network-blocked),
+ELM/authorities (proprietary). Nothing publicly clonable holds it.

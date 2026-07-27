@@ -1,0 +1,109 @@
+InputValidationError: permission handler updatedInput failed schema for ToolSearch
+
+============================================================
+
+<tool_use_error>The permission handler returned updatedInput for ToolSearch that failed schema validation: ToolSearch failed due to the following issue:
+The required parameter `query` is missing
+This is a configuration issue in your canUseTool callback, PermissionRequest hook, or permission-prompt tool — updatedInput must satisfy the tool's input schema. The tool input from the model was valid.</tool_use_error>
+
+============================================================
+
+InputValidationError: permission handler updatedInput failed schema for ToolSearch
+
+============================================================
+
+<tool_use_error>The permission handler returned updatedInput for ToolSearch that failed schema validation: ToolSearch failed due to the following issue:
+The required parameter `query` is missing
+This is a configuration issue in your canUseTool callback, PermissionRequest hook, or permission-prompt tool — updatedInput must satisfy the tool's input schema. The tool input from the model was valid.</tool_use_error>
+
+============================================================
+
+InputValidationError: permission handler updatedInput failed schema for ToolSearch
+
+============================================================
+
+<tool_use_error>The permission handler returned updatedInput for ToolSearch that failed schema validation: ToolSearch failed due to the following issue:
+The required parameter `query` is missing
+This is a configuration issue in your canUseTool callback, PermissionRequest hook, or permission-prompt tool — updatedInput must satisfy the tool's input schema. The tool input from the model was valid.</tool_use_error>
+
+============================================================
+
+InputValidationError: permission handler updatedInput failed schema for ToolSearch
+
+============================================================
+
+<tool_use_error>The permission handler returned updatedInput for ToolSearch that failed schema validation: ToolSearch failed due to the following issue:
+The required parameter `query` is missing
+This is a configuration issue in your canUseTool callback, PermissionRequest hook, or permission-prompt tool — updatedInput must satisfy the tool's input schema. The tool input from the model was valid.</tool_use_error>
+
+============================================================
+
+InputValidationError: permission handler updatedInput failed schema for WebSearch
+
+============================================================
+
+<tool_use_error>The permission handler returned updatedInput for WebSearch that failed schema validation: WebSearch failed due to the following issue:
+The required parameter `query` is missing
+This is a configuration issue in your canUseTool callback, PermissionRequest hook, or permission-prompt tool — updatedInput must satisfy the tool's input schema. The tool input from the model was valid.</tool_use_error>
+
+============================================================
+
+<tool_use_error>The permission handler returned updatedInput for Bash that failed schema validation: Bash failed due to the following issue:
+The required parameter `command` is missing
+This is a configuration issue in your canUseTool callback, PermissionRequest hook, or permission-prompt tool — updatedInput must satisfy the tool's input schema. The tool input from the model was valid.</tool_use_error>
+
+============================================================
+
+<tool_use_error>The permission handler returned updatedInput for Glob that failed schema validation: Glob failed due to the following issue:
+The required parameter `pattern` is missing
+This is a configuration issue in your canUseTool callback, PermissionRequest hook, or permission-prompt tool — updatedInput must satisfy the tool's input schema. The tool input from the model was valid.</tool_use_error>
+
+============================================================
+
+InputValidationError: permission handler updatedInput failed schema for WebSearch
+
+============================================================
+
+<tool_use_error>The permission handler returned updatedInput for WebSearch that failed schema validation: WebSearch failed due to the following issue:
+The required parameter `query` is missing
+This is a configuration issue in your canUseTool callback, PermissionRequest hook, or permission-prompt tool — updatedInput must satisfy the tool's input schema. The tool input from the model was valid.</tool_use_error>
+
+============================================================
+
+Error: Output does not match required schema: root: must have required property 'leads', root: must have required property 'dead_ends'
+
+============================================================
+
+Output does not match required schema: root: must have required property 'leads', root: must have required property 'dead_ends'
+
+============================================================
+
+Error: Output does not match required schema: root: must have required property 'leads', root: must have required property 'dead_ends'
+
+============================================================
+
+Output does not match required schema: root: must have required property 'leads', root: must have required property 'dead_ends'
+
+============================================================
+
+Error: Output does not match required schema: root: must have required property 'leads', root: must have required property 'dead_ends'
+
+============================================================
+
+Output does not match required schema: root: must have required property 'leads', root: must have required property 'dead_ends'
+
+============================================================
+
+Error: Output does not match required schema: root: must have required property 'leads', root: must have required property 'dead_ends'
+
+============================================================
+
+Output does not match required schema: root: must have required property 'leads', root: must have required property 'dead_ends'
+
+============================================================
+
+Error: Output does not match required schema: root: must have required property 'leads', root: must have required property 'dead_ends'
+
+============================================================
+
+Output does not match required schema: root: must have required property 'leads', root: must have required property 'dead_ends'

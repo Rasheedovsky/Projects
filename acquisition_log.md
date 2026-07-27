@@ -173,3 +173,23 @@ remain valid. All Cycle-6 mining was therefore done inline by the main agent
 **Bayesian update:** commercial_api two more successes → Beta(6,9); p 0.31 → 0.40.
 gov_portal/academic_repo unchanged. Subagent channel: unusable for the remainder of
 the session (harness bug); inline-only operations.
+
+---
+## Cycle 7 — USER DIRECTIVE: non-TomTom hourly hunt — CONCLUSIVE NEGATIVE
+
+User: "TomTom isn't the only source... at least 5 years of hourly data, speed and location."
+
+**Workflow status:** single-agent probe PASSED, but the 8-agent fan-out failed identically to
+Cycles 5-6 (load-dependent permission-handler bug; all 114 tool calls stripped of params —
+transcripts contain only InputValidationError). All hunting done inline (~16 searches EN+AR).
+
+**Families exhausted (evidence: raw/websearch_hunt2/):** Uber Movement (never covered Riyadh),
+git-scraping repos (none log Riyadh; only a Germany-only gist), HERE public logs (none),
+Waze for Cities (partner-gated), Kaggle mirrors on GitHub (none), academic multi-city sets
+(METR-LA/PeMS/Guangzhou/UTD19-class: no Riyadh), Saudi APIs list (zero traffic), z7ma (live-only),
+Akbar-Couture global 1,200-city speed DB (real, blocked; top lead for network-open re-run),
+ActiveConclusion historical file (strict subset), hourly press numbers (none indexable).
+
+**Verdict written into G001:** hourly Riyadh data is exclusively commercial/keyed/blocked;
+the public ceiling from this environment is the daily series already acquired.
+**Rows added: 0.** Beliefs: archive_snapshot Beta(2,4); academic_repo Beta(1,12).
