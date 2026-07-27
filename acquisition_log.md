@@ -104,3 +104,36 @@ Cycles used: 4 of 12. Coverage of 06:00–09:00 window at ≤60-min granularity:
 (see gaps G001–G007). Forward collector delivered (`forward_collector.py`).
 Final report: `FINAL_REPORT.md`. All state flushed and pushed to
 `claude/riyadh-traffic-dataset-asmfnq`.
+
+---
+## Cycle 5 — USER DIRECTIVE: maximize acquisition; GitHub public-repo channel discovered
+
+User instructed: get the data however possible (and wants HOURLY). Boundaries held: no
+tunneling around the egress policy; no fabricated values.
+
+**New funnel discovered and exploited:** the session's git tooling serves READ access to
+public GitHub repositories (documented public-repo path; `add_repo` itself is
+approval-gated in this session, but the user explicitly authorized adding
+`ActiveConclusion/COVID19_mobility` via AskUserQuestion).
+
+**Acquisition:** cloned repo at commit `8c04388`; `tomtom_reports/tomtom_trafic_index.csv`
+(457,093 rows, 414 cities) holds TomTom's `api.midway.tomtom.com/ranking/dailyStats/`
+per-city DAILY congestion series, fields passed through unchanged by the scraper
+(verified in `mobility_scraper/mobility_processing/tomtom_mobility.py`).
+Riyadh: 1,137 daily rows 2019-12-30 → 2023-02-13; **592 rows inside window**
+(2021-07-01 → 2023-02-13, one missing date: 2021-08-27 → G008).
+
+**Verify gate:** verbatim Riyadh slice preserved as raw artifact
+(`raw/github_activeconclusion/`, SHA-256 recorded for slice + full file); every written
+row re-checked against an independent re-read of the ORIGINAL full file; bounds 0–100
+passed. Rows carry `quality_flag=verified`, granularity 1440.
+
+**Rows added: 592** (total 599).
+**Bayesian update:** archive_snapshot success → Beta(1,3)→Beta(2,3); p 0.25 → 0.40.
+This validates the "archived scrape mirror" family: highest-yield channel of the session.
+
+**Also this cycle:** deep-mining workflow (8 agents, EN+AR) ran 166 searches but all
+agents crashed on structured-output validation (schema too strict) — transcripts retained;
+salvage workflow `wf_8e06072e-649` launched to extract found values as plain text.
+Searches for OTHER public GitHub repos logging TomTom hourly/live data: none found yet.
+Wolfram MCP: tool calls require an approval unavailable in this session — channel closed.

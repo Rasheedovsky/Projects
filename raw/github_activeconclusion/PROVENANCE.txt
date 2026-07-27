@@ -1,0 +1,14 @@
+Raw artifact provenance — TomTom daily congestion for Riyadh
+Fetched: 2026-07-27T19:18:34+00:00 by cloning public GitHub repo
+  https://github.com/ActiveConclusion/COVID19_mobility  (commit 8c043881e302463d5c6bb15a56cbf663136b2b97)
+  via the session's git proxy (documented public-repo read path). User authorized the repo add.
+Original file: tomtom_reports/tomtom_trafic_index.csv (457,093 rows, 414 cities, 2019-12-30..2023-02-14)
+  sha256 be697f865b07bac0a0935dcf6ab0ce4d7104e1eabe2f589d4d9e1f71bf6596a4
+Committed artifact here = verbatim line-for-line Riyadh slice of that file (header + every line
+containing ',Riyadh,'), nothing modified: tomtom_trafic_index_riyadh_slice.csv sha256 423432ce24adc946f2950b3faae61b6f18832783dc6cdc871ad2b329b9725730
+Reproduce: git clone the repo at that commit; grep ',Riyadh,' tomtom_reports/tomtom_trafic_index.csv
+Upstream data source (per repo scraper mobility_scraper/mobility_processing/tomtom_mobility.py):
+  https://api.midway.tomtom.com/ranking/dailyStats/SAU_riyadh — the scraper stores the API's own
+  'congestion' and 'diffRatio' fields unchanged. congestion = TomTom daily congestion level
+  (extra travel time vs free-flow, percent, daily average). License: repo is MIT (code);
+  data (c) TomTom, republished in repo.
