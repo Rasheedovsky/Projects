@@ -1,0 +1,1 @@
+timestamp_utc,timestamp_riyadh,date,hour,minute,is_morning_peak,road_segment_id,road_name,lat,lon,avg_speed_kmh,free_flow_speed_kmh,congestion_index,congestion_definition,granularity_minutes,source_name,source_url,retrieved_at,license,quality_flag

@@ -1,0 +1,17 @@
+# Network reachability probe — 2026-07-27 (UTC)
+# Container egress test through session proxy; 'CONNECT tunnel failed, response 403' = denied by org egress policy
+web.archive.org: curl: (56) CONNECT tunnel failed, response 403 000
+www.tomtom.com: curl: (56) CONNECT tunnel failed, response 403 000
+api.midway.tomtom.com: curl: (56) CONNECT tunnel failed, response 403 000
+open.data.gov.sa: curl: (56) CONNECT tunnel failed, response 403 000
+zenodo.org: curl: (56) CONNECT tunnel failed, response 403 000
+data.mendeley.com: curl: (56) CONNECT tunnel failed, response 403 000
+dataverse.harvard.edu: curl: (56) CONNECT tunnel failed, response 403 000
+www.kaggle.com: curl: (56) CONNECT tunnel failed, response 403 000
+archive.org: curl: (56) CONNECT tunnel failed, response 403 000
+timetravel.mementoweb.org: curl: (56) CONNECT tunnel failed, response 403 000
+data.gov.sa: curl: (56) CONNECT tunnel failed, response 403 000
+datasource.kapsarc.org: curl: (56) CONNECT tunnel failed, response 403 000
+example.com: curl: (56) CONNECT tunnel failed, response 403 000
+
+# WebFetch tool results (server-side fetcher): web.archive.org -> 'Claude Code is unable to fetch from web.archive.org'; www.tomtom.com, zenodo.org, example.com -> HTTP 403 Forbidden (egress policy). WebSearch tool: WORKING.

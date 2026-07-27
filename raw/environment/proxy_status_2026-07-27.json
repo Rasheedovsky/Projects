@@ -1,0 +1,94 @@
+{
+  "enabled": true,
+  "port": 37597,
+  "caBundlePath": "/root/.ccr/ca-bundle.crt",
+  "hasSystemCa": true,
+  "noProxy": "localhost,127.0.0.1,::1,127.0.0.0/8,0.0.0.0/8,::,169.254.0.0/16,anthropic.com,.anthropic.com,*.anthropic.com,registry.npmjs.org,jsr.io,npm.jsr.io,pypi.org,files.pythonhosted.org,index.crates.io,proxy.golang.org,host.docker.internal,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,100.64.0.0/10,.svc.cluster.local,*.svc.cluster.local",
+  "selective": false,
+  "standalone": false,
+  "toolScoped": false,
+  "javaTrustStorePath": "/root/.ccr/java-truststore.p12",
+  "readmePath": "/root/.ccr/README.md",
+  "gitConfigInjection": true,
+  "gitSshRewrite": true,
+  "recentRelayFailures": [
+    {
+      "ts": "2026-07-27T04:04:16.761Z",
+      "kind": "connect_rejected",
+      "detail": "gateway answered 403 to CONNECT (policy denial or upstream failure)",
+      "host": "web.archive.org:443"
+    },
+    {
+      "ts": "2026-07-27T04:04:18.064Z",
+      "kind": "connect_rejected",
+      "detail": "gateway answered 403 to CONNECT (policy denial or upstream failure)",
+      "host": "web.archive.org:443"
+    },
+    {
+      "ts": "2026-07-27T04:04:38.886Z",
+      "kind": "connect_rejected",
+      "detail": "gateway answered 403 to CONNECT (policy denial or upstream failure)",
+      "host": "www.tomtom.com:443"
+    },
+    {
+      "ts": "2026-07-27T04:04:39.207Z",
+      "kind": "connect_rejected",
+      "detail": "gateway answered 403 to CONNECT (policy denial or upstream failure)",
+      "host": "api.midway.tomtom.com:443"
+    },
+    {
+      "ts": "2026-07-27T04:04:39.546Z",
+      "kind": "connect_rejected",
+      "detail": "gateway answered 403 to CONNECT (policy denial or upstream failure)",
+      "host": "open.data.gov.sa:443"
+    },
+    {
+      "ts": "2026-07-27T04:04:39.863Z",
+      "kind": "connect_rejected",
+      "detail": "gateway answered 403 to CONNECT (policy denial or upstream failure)",
+      "host": "zenodo.org:443"
+    },
+    {
+      "ts": "2026-07-27T04:04:40.149Z",
+      "kind": "connect_rejected",
+      "detail": "gateway answered 403 to CONNECT (policy denial or upstream failure)",
+      "host": "data.mendeley.com:443"
+    },
+    {
+      "ts": "2026-07-27T04:04:40.460Z",
+      "kind": "connect_rejected",
+      "detail": "gateway answered 403 to CONNECT (policy denial or upstream failure)",
+      "host": "dataverse.harvard.edu:443"
+    },
+    {
+      "ts": "2026-07-27T04:04:40.800Z",
+      "kind": "connect_rejected",
+      "detail": "gateway answered 403 to CONNECT (policy denial or upstream failure)",
+      "host": "www.kaggle.com:443"
+    },
+    {
+      "ts": "2026-07-27T04:04:41.217Z",
+      "kind": "connect_rejected",
+      "detail": "gateway answered 403 to CONNECT (policy denial or upstream failure)",
+      "host": "archive.org:443"
+    },
+    {
+      "ts": "2026-07-27T04:04:41.515Z",
+      "kind": "connect_rejected",
+      "detail": "gateway answered 403 to CONNECT (policy denial or upstream failure)",
+      "host": "timetravel.mementoweb.org:443"
+    },
+    {
+      "ts": "2026-07-27T04:04:41.807Z",
+      "kind": "connect_rejected",
+      "detail": "gateway answered 403 to CONNECT (policy denial or upstream failure)",
+      "host": "data.gov.sa:443"
+    },
+    {
+      "ts": "2026-07-27T04:04:42.144Z",
+      "kind": "connect_rejected",
+      "detail": "gateway answered 403 to CONNECT (policy denial or upstream failure)",
+      "host": "datasource.kapsarc.org:443"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+source_name,source_type,status,evidence_url,license,cost_note,alpha,beta,value_est,effort_est,score,last_cycle
+wayback_tomtom_midway_live_api,archive_snapshot,exhausted,https://web.archive.org/cdx/search/cdx?url=api.midway.tomtom.com/ranking/live/SAU%252Friyadh,unknown,BLOCKED: web.archive.org denied by session egress policy (curl CONNECT 403; WebFetch host-blocked). Evidence raw/environment/host_reachability_2026-07-27.txt,1,3,0.5,3,0.042,1
+wayback_tomtom_index_pages,archive_snapshot,exhausted,https://web.archive.org/cdx/search/cdx?url=tomtom.com/en_gb/traffic-index/riyadh-traffic/,unknown,BLOCKED: same egress-policy denial as above,1,3,0.5,3,0.042,1
+tomtom_traffic_index_website,commercial_api,probing,https://www.tomtom.com/traffic-index/city/riyadh,free to view; TomTom terms,Direct fetch blocked by egress policy; probing via WebSearch snippets only,1,1,0.05,4,0.006,1
+tomtom_move_traffic_stats,commercial_api,untried,https://www.tomtom.com/products/traffic-stats/,commercial,Requires account/key; pricing being probed,1,1,0.9,6,0.075,1
+here_traffic_api_historical,commercial_api,untried,https://www.here.com/platform/traffic-solutions,commercial,Requires API key; free tier limits being probed,1,1,0.9,6,0.075,1
+inrix_roadway_analytics,commercial_api,untried,https://inrix.com/products/roadway-analytics/,commercial,Enterprise; quote-only expected,1,1,0.8,6,0.067,1
+google_bigquery_public_datasets,commercial_api,paywalled_or_keyed,https://cloud.google.com/bigquery/public-data,varies,Requires GCP credentials/project (no key provided); also no known Riyadh traffic table,1,1,0.3,5,0.03,1
+google_maps_roads_api,commercial_api,untried,https://developers.google.com/maps/documentation,commercial,Key required; unclear if historical (vs predictive) is offered,1,1,0.4,5,0.04,1
+open_data_gov_sa,gov_portal,untried,https://open.data.gov.sa,open government,Direct fetch blocked by egress policy; probing via WebSearch,1,1,0.5,5,0.05,1
+royal_commission_riyadh_city,gov_portal,untried,https://www.rcrc.gov.sa,unknown,Probing via WebSearch,1,1,0.5,5,0.05,1
+ministry_transport_logistics_sa,gov_portal,untried,https://mot.gov.sa,unknown,Probing via WebSearch,1,1,0.3,5,0.03,1
+gastat,gov_portal,untried,https://www.stats.gov.sa,open government,Transport stats are annual; unlikely to hold speeds,1,1,0.1,4,0.0125,1
+kapsarc_datasource,gov_portal,untried,https://datasource.kapsarc.org,CC-BY mostly,Direct fetch blocked by egress policy; probing via WebSearch,1,1,0.4,4,0.05,1
+zenodo,academic_repo,untried,https://zenodo.org/search?q=riyadh+traffic,varies (often CC),Direct fetch + API blocked by egress policy; probing via WebSearch,1,1,0.6,4,0.075,1
+mendeley_data,academic_repo,untried,https://data.mendeley.com,varies,Blocked for direct fetch; probing via WebSearch,1,1,0.6,4,0.075,1
+ieee_dataport,academic_repo,untried,https://ieee-dataport.org,varies,Requires IEEE account for download,1,1,0.5,5,0.05,1
+harvard_dataverse,academic_repo,untried,https://dataverse.harvard.edu,varies,Blocked for direct fetch; probing via WebSearch,1,1,0.5,4,0.0625,1
+figshare,academic_repo,untried,https://figshare.com,varies,Blocked for direct fetch; probing via WebSearch,1,1,0.5,4,0.0625,1
+kaggle,academic_repo,untried,https://www.kaggle.com,varies,Download requires Kaggle account + API key,1,1,0.5,5,0.05,1
+numbeo_traffic_index,commercial_api,untried,https://www.numbeo.com/traffic/in/Riyadh,free to view,Survey-based composite index; annual; probing via WebSearch,1,1,0.03,3,0.005,1
+inrix_global_scorecard,commercial_api,untried,https://inrix.com/scorecard/,free to view,Probing whether Riyadh is ranked,1,1,0.1,3,0.0167,1
+xmap_ai_saudi_road_traffic,commercial_api,untried,https://www.xmap.ai/data-catalogs/saudi-arabia-road-traffic-data,commercial,Sample on request; quote-only expected,1,1,0.6,5,0.06,1
