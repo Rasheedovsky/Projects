@@ -283,7 +283,7 @@ class ETASModel:
             0.0,
         )
         lam = self.mu + self.K0 * contrib.sum(axis=1)
-        return lam if lam.size > 1 else float(lam[0])
+        return lam if lam.size != 1 else float(lam[0])
 
     def compensator(self, t):
         """Lambda(t) = integral_0^t lambda(s) ds  (analytic)."""
