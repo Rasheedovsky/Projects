@@ -1,0 +1,8 @@
+RAW WebSearch tool output, saved verbatim. Query issued by main agent (verify gate), 2026-07-27 ~04:55 UTC.
+QUERY: TomTom traffic index Riyadh average speed "24.8 km/h" 2025
+
+Web search results for query: "TomTom traffic index Riyadh average speed "24.8 km/h" 2025"
+
+Links: [{"title":"Riyadh traffic report | TomTom Traffic Index","url":"https://www.tomtom.com/traffic-index/city/riyadh"},{"title":"Saudi Arabia Road Traffic in 2025 - All What You Need to Know","url":"https://www.xmap.ai/blog/saudi-arabia-road-traffic-all-what-you-need-to-know"},{"title":"Jeddah traffic report | TomTom Traffic Index","url":"https://www.tomtom.com/traffic-index/jeddah-traffic/"},{"title":"Saudi Arabia traffic report | TomTom Traffic Index","url":"https://www.tomtom.com/traffic-index/country/saudi-arabia/"},{"title":"The latest TomTom Traffic Index | TomTom Newsroom","url":"https://www.tomtom.com/newsroom/explainers-and-insights/tomtom-traffic-index-2026-headline-numbers/"},{"title":"Tomtom traffic index ranking 2024 by city","url":"https://www.facebook.com/groups/socalfilipinos/posts/1830631027779119/"},{"title":"According to statistics from the TomTom website, Riyadh ...","url":"https://www.facebook.com/ksaexpatsdotcom/posts/according-to-statistics-from-the-tomtom-website-riyadh-ranks-267th-worldwide-in-/1038966134934801/"}]
+
+Based on the search results, I found information about TomTom's traffic data for Riyadh in 2025. According to the TomTom Traffic Index, Riyadh had an average speed of 24.8 km/h in 2025, with drivers losing 66 hours (2 days, 18 hours) due to traffic during rush hour, which was 5 hours 6 minutes less than in 2024.

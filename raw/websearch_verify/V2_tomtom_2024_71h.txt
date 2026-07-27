@@ -1,0 +1,8 @@
+RAW WebSearch tool output, saved verbatim. Query issued by main agent (verify gate), 2026-07-27 ~04:55 UTC.
+QUERY: TomTom Riyadh rush hour 2024 "71 hours" time lost traffic
+
+Web search results for query: "TomTom Riyadh rush hour 2024 "71 hours" time lost traffic"
+
+Links: [{"title":"Riyadh traffic report | TomTom Traffic Index","url":"https://www.tomtom.com/traffic-index/city/riyadh"},{"title":"Jeddah traffic report | TomTom Traffic Index","url":"https://www.tomtom.com/traffic-index/city/jeddah/"},{"title":"TomTom Traffic Index: Commuters losing time in traffic jams | NAVIT","url":"https://www.navit.com/blog/annual-tomtom-traffic-index-commuters-spend-the-longest-time-in-traffic-jams-in-these-cities"},{"title":"Saudi Arabia traffic report | TomTom Traffic Index","url":"https://www.tomtom.com/traffic-index/country/saudi-arabia/"},{"title":"The latest TomTom Traffic Index | TomTom Newsroom","url":"https://www.tomtom.com/newsroom/explainers-and-insights/tomtom-traffic-index-2026-headline-numbers/"},{"title":"About | TomTom Traffic Index","url":"https://www.tomtom.com/traffic-index/about/"},{"title":"www.mexc.com","url":"https://www.mexc.com/news/529493"},{"title":"DID YOU KNOW: NCR motorists, commuters lost 188 hours to traffic jam in 2020 | Inquirer News","url":"https://newsinfo.inquirer.net/?p=1384142"}]
+
+Based on the search results, I found relevant information about Riyadh's traffic situation. According to TomTom's Traffic Index, time lost due to traffic during rush hour in Riyadh in 2024 was 71 hours (equivalent to 2 days and 23 hours). The search results also indicate that in 2025, this decreased to 66 hours, which is 5 hours and 6 minutes less than in 2024.

@@ -36,7 +36,7 @@ The **only** working acquisition channel was the WebSearch tool. Consequently:
 | `hour` | 0–23 | Riyadh-local hour (period start for aggregates). |
 | `minute` | 0–59 | Riyadh-local minute (period start for aggregates). |
 | `is_morning_peak` | 0/1 | 1 iff 06:00–08:59 Asia/Riyadh. Aggregate rows: 1 only if the aggregate is *specifically* a morning-rush-hour statistic. |
-| `road_segment_id` | string | Stable segment key. City-level aggregates use `CITY_RIYADH`. Forward-collector segments use keys defined in `forward_collector.py` (e.g. `KING_FAHD_RD_C`). |
+| `road_segment_id` | string | Stable segment key. City-level aggregates use `CITY_RIYADH`; aggregates whose scope is specifically rush-hour periods (both peaks) use `CITY_RIYADH_RUSH_HOUR`. Forward-collector segments use keys defined in `forward_collector.py` (e.g. `KING_FAHD_RD_C`). |
 | `road_name` | string | Human-readable road name, or `Riyadh (city-wide)`. |
 | `lat`, `lon` | decimal deg | Segment probe point (WGS84). City-level rows: 24.7136, 46.6753 (Riyadh centroid). |
 | `avg_speed_kmh` | float | Measured average speed, km/h, bounds 0–160. Empty if the source published no speed. **Never derived from another column.** |
@@ -55,6 +55,13 @@ The **only** working acquisition channel was the WebSearch tool. Consequently:
 - **TomTom Traffic Index (congestion level %)**: "the extra travel time a driver experiences
   compared to free-flow (uncongested) conditions", expressed as a percentage; e.g. 25% means
   a trip takes 25% longer than under free-flow. Annual city figure. Scale 0–100+.
+- **TomTom Traffic Index (rush-hour hours lost)**: hours lost per year driving in rush
+  hour vs free-flow conditions, computed by TomTom for a typical 10 km commute twice a
+  day (2024/2025 edition methodology). Stored on `CITY_RIYADH_RUSH_HOUR` rows.
+- **AGBI / "Breaking the Middle East's Billion-Dollar Traffic Challenge"** (blended
+  INRIX + TomTom 2024 data): hours per year lost to traffic delays (annual scope) and
+  in rush-hour periods (rush-hour scope). NOT comparable with TomTom's own hours-lost
+  series (different methodology; 58 h vs TomTom's 71.1 h for the same year 2024).
 - **Numbeo Traffic Index**: composite index of time in traffic, time dissatisfaction,
   CO2 and overall inefficiency, from user surveys. Dimensionless, typically 0–320.
   NOT a road-measurement; retained only as a labeled aggregate.

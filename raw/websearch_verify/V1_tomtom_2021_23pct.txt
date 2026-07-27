@@ -1,0 +1,8 @@
+RAW WebSearch tool output, saved verbatim. Query issued by main agent (verify gate), 2026-07-27 ~04:55 UTC.
+QUERY: TomTom traffic index Riyadh 2021 congestion level 23% rank
+
+Web search results for query: "TomTom traffic index Riyadh 2021 congestion level 23% rank"
+
+Links: [{"title":"Traffic Index 2021 Created to help you tackle traffic – as a driver, city","url":"https://nonews.co/wp-content/uploads/2022/02/TomTom2021.pdf"},{"title":"Riyadh traffic report | TomTom Traffic Index","url":"https://www.tomtom.com/traffic-index/city/riyadh"},{"title":"The latest TomTom Traffic Index | TomTom Newsroom","url":"https://www.tomtom.com/newsroom/explainers-and-insights/tomtom-traffic-index-2026-headline-numbers/"},{"title":"Saudi Arabia traffic report | TomTom Traffic Index","url":"https://www.tomtom.com/traffic-index/country/saudi-arabia/"},{"title":"TomTom Traffic Index – Live congestion statistics and historical data","url":"https://jacobsmedia.com/wp-content/uploads/2021/02/TomTom-Traffic-Index-%E2%80%93-Live-congestion-statistics-and-historical-data.html"},{"title":"Traffic Index report | TomTom Traffic Index","url":"https://www.tomtom.com/downloads/traffic-index-report/"},{"title":"Traffic Index ranking | TomTom Traffic Index","url":"https://www.tomtom.com/traffic-index/ranking/"},{"title":"Tomtom traffic index ranking 2024 by city","url":"https://www.facebook.com/groups/socalfilipinos/posts/1830631027779119/"}]
+
+Perfect! I found the information you were looking for. According to the TomTom Traffic Index 2021, Riyadh, Saudi Arabia had a congestion level of 23% and ranked 162nd globally.

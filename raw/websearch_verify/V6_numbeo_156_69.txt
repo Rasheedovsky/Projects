@@ -1,0 +1,13 @@
+RAW WebSearch tool output, saved verbatim. Query issued by main agent (verify gate), 2026-07-27 ~04:55 UTC.
+QUERY: Numbeo traffic index Riyadh 2021 2022 2023 mid-year ranking value
+OUTCOME: historical yearly Riyadh values NOT visible; current Traffic Index 156.69 sighted (second independent sighting; first was in probe sweep, raw/websearch_sweep/).
+
+Web search results for query: "Numbeo traffic index Riyadh 2021 2022 2023 mid-year ranking value"
+
+Links: [{"title":"Africa: Traffic Index by Country 2023 Mid-Year","url":"https://www.numbeo.com/traffic/rankings_by_country.jsp?title=2023-mid&displayColumn=0&region=002"},{"title":"Traffic Index by Country","url":"https://www.numbeo.com/traffic/rankings_by_country.jsp?title="},{"title":"Traffic in Riyadh, Saudi Arabia","url":"https://www.numbeo.com/traffic/in/Riyadh"},{"title":"Traffic Index by Country 2021","url":"https://www.numbeo.com/traffic/rankings_by_country.jsp?title=2021"},{"title":"Traffic Index by Country 2021 Mid-Year","url":"https://www.numbeo.com/traffic/rankings_by_country.jsp?title=2021-mid"},{"title":"Traffic Index by Country 2022","url":"https://www.numbeo.com/traffic/rankings_by_country.jsp?title=2022"},{"title":"Traffic Index by Country 2023","url":"https://www.numbeo.com/traffic/rankings_by_country.jsp?title=2023"},{"title":"Riyadh Bus","url":"https://en.wikipedia.org/wiki/Riyadh_Bus"},{"title":"List of tourist attractions in Riyadh","url":"https://en.wikipedia.org/wiki/List_of_tourist_attractions_in_Riyadh"},{"title":"Current Traffic Index","url":"https://www.numbeo.com/traffic/rankings_current.jsp"}]
+
+I found some Numbeo traffic index information. The search results show that Riyadh currently has a Traffic Index of 156.69 according to Numbeo. However, the specific historical ranking values for Riyadh across 2021, 2022, and 2023 mid-year periods are not directly displayed in these search results.
+
+The search results primarily show country-level rankings data from Numbeo rather than city-specific data for Riyadh across those specific time periods. While the Numbeo website has options to view data for different years and mid-year periods (2021, 2021 Mid-Year, 2022, 2022 Mid-Year, 2023, and 2023 Mid-Year), the actual Riyadh-specific index values for those time periods are not included in the returned search results content.
+
+To get the specific mid-year ranking values for Riyadh from 2021-2023, you would need to visit Numbeo's traffic index pages directly and navigate to the city-specific data for those particular time periods.

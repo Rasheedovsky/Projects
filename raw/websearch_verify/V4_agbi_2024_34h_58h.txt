@@ -1,0 +1,14 @@
+RAW WebSearch tool output, saved verbatim. Query issued by main agent (verify gate), 2026-07-27 ~04:55 UTC.
+QUERY: Riyadh 34 hours delays 58 hours rush hour 2024 congestion 28 percent free-flow
+
+Web search results for query: "Riyadh 34 hours delays 58 hours rush hour 2024 congestion 28 percent free-flow"
+
+Links: [{"title":"Traffic congestion tightens grip on Dubai and Riyadh | AGBI","url":"https://www.agbi.com/infrastructure/2026/01/traffic-congestion-tightens-grip-on-dubai-and-riyadh/"},{"title":"Riyadh traffic report | TomTom Traffic Index","url":"https://www.tomtom.com/traffic-index/city/riyadh"},{"title":"Saudi Arabia Road Traffic in 2025 - All What You Need to Know","url":"https://www.xmap.ai/blog/saudi-arabia-road-traffic-all-what-you-need-to-know"},{"title":"Saudi Arabia traffic report | TomTom Traffic Index","url":"https://www.tomtom.com/traffic-index/country/saudi-arabia/"},{"title":"Traffic congestion in Riyadh needs a lifeline | Arab News","url":"https://www.arabnews.com/node/2580260/traffic-congestion-riyadh-needs-lifeline"},{"title":"Riyadh Traffic Reduces as Metro Gets Massive Popularity","url":"https://www.saudimoments.com/riyadh-traffic-reduces-as-metro-gets-massive-popularity-700924.html"},{"title":"Riyadh traffic congestion report | Traffic Index","url":"https://trafficindex.org/riyadh/"},{"title":"Riyadh Traffic Analysis: Morning vs Evening Rush Hour ...","url":"https://www.linkedin.com/posts/kapsarc_sunday-marks-the-start-of-the-week-in-riyadh-activity-7408416049966194688-3mxN"}]
+
+Based on the search results, I found the information matching your query:
+
+Residents of Riyadh experience 34 hours of delays annually, and rush-hour delays amount to 58 hours a year in the Saudi capital. These findings are published in "Breaking the Middle East's Billion-Dollar Traffic Challenge," which draws on 2024 data from global traffic analytics platforms INRIX and TomTom.
+
+The report also notes that congestion is measured as the additional time spent driving compared with "free-flow conditions" when roads are operating without delays.
+
+However, I didn't find the specific "28 percent" congestion figure in these results. The search results do mention that Riyadh has a congestion rate reaching 23 percent from an earlier report, but this differs from the 28 percent figure in your query.

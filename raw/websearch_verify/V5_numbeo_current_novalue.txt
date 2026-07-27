@@ -1,0 +1,13 @@
+RAW WebSearch tool output, saved verbatim. Query issued by main agent (verify gate), 2026-07-27 ~04:55 UTC.
+QUERY: Numbeo traffic index Riyadh current value time index minutes
+OUTCOME: no numeric Riyadh value visible in this pass (negative verification artifact).
+
+Web search results for query: "Numbeo traffic index Riyadh current value time index minutes"
+
+Links: [{"title":"Asia: Current Traffic Index by City","url":"https://www.numbeo.com/traffic/region_rankings_current.jsp?region=142"},{"title":"Current Traffic Index on a Map","url":"https://www.numbeo.com/traffic/gmaps.jsp"},{"title":"Eastern Asia: Current Traffic Index by City","url":"https://www.numbeo.com/traffic/region_rankings_current.jsp?region=030"},{"title":"Current Traffic Index","url":"https://www.numbeo.com/traffic/rankings_current.jsp"},{"title":"Traffic Index by City 2026 Mid-Year","url":"https://www.numbeo.com/traffic/rankings.jsp"},{"title":"Traffic Index by City 2026","url":"https://www.numbeo.com/traffic/rankings.jsp?title=2026"},{"title":"Traffic Index by Country 2026 Mid-Year","url":"https://www.numbeo.com/traffic/rankings_by_country.jsp"},{"title":"Traffic in Riyadh, Saudi Arabia","url":"https://www.numbeo.com/traffic/in/Riyadh"},{"title":"South America: Current Traffic Index by City","url":"https://www.numbeo.com/traffic/region_rankings_current.jsp?region=005"},{"title":"Riyadh Bus","url":"https://en.wikipedia.org/wiki/Riyadh_Bus"}]
+
+The search results show Numbeo's traffic index pages but don't display the specific current values for Riyadh. The search returned general information about Numbeo's traffic tracking and pages about Riyadh, but the actual numerical data for Riyadh's current traffic index and time index weren't included in the search results.
+
+Based on the search results, I found that Numbeo offers a comprehensive platform to explore traffic conditions in various cities worldwide, surveying commute time, distance and modes of transportation, and that the traffic index includes metrics like Traffic Index and Time Index (in minutes).
+
+However, the specific current values for Riyadh's traffic index and time index in minutes are not displayed in these search results. To get the most current data, you would need to visit Numbeo's traffic page for Riyadh directly at numbeo.com/traffic/in/Riyadh, as these data are updated continuously.
