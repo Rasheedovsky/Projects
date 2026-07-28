@@ -7,6 +7,9 @@ on:
         description: "snapshot (one intraday observation) or wayback (historical harvest)"
         required: false
         default: "snapshot"
+  push:
+    paths:
+      - "collector/trigger"
   schedule:
     # Every 30 minutes — builds the sub-hourly Riyadh series autonomously.
     # NOTE: scheduled runs only fire once this file is on the repository's default branch.
@@ -31,7 +34,12 @@ jobs:
       - name: Collect
         env:
           TOMTOM_KEY: ${{ secrets.TOMTOM_KEY }}
-        run: python3 collector/collect.py "${{ github.event.inputs.mode || 'snapshot' }}"
+        run: |
+          MODE="${{ github.event.inputs.mode }}"
+          if [ -z "$MODE" ] && [ -f collector/trigger ]; then
+            MODE=$(grep -oE 'snapshot|wayback' collector/trigger | tail -1)
+          fi
+          python3 collector/collect.py "${MODE:-snapshot}"
 
       - name: Commit and push data
         run: |
