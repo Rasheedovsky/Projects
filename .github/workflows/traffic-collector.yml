@@ -1,0 +1,49 @@
+name: traffic-collector
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "snapshot (one intraday observation) or wayback (historical harvest)"
+        required: false
+        default: "snapshot"
+  schedule:
+    # Every 30 minutes — builds the sub-hourly Riyadh series autonomously.
+    # NOTE: scheduled runs only fire once this file is on the repository's default branch.
+    - cron: "7,37 * * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: traffic-collector
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Collect
+        env:
+          TOMTOM_KEY: ${{ secrets.TOMTOM_KEY }}
+        run: python3 collector/collect.py "${{ github.event.inputs.mode || 'snapshot' }}"
+
+      - name: Commit and push data
+        run: |
+          git config user.name "traffic-collector[bot]"
+          git config user.email "traffic-collector@users.noreply.github.com"
+          git add collector/data
+          if git diff --cached --quiet; then
+            echo "no new data"; exit 0
+          fi
+          git commit -m "collector: ${{ github.event.inputs.mode || 'snapshot' }} $(date -u +%Y-%m-%dT%H:%MZ)"
+          for i in 1 2 3; do
+            git push && exit 0
+            git pull --rebase && continue
+          done
+          git push
