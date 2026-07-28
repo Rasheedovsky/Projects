@@ -37,7 +37,7 @@ jobs:
         run: |
           MODE="${{ github.event.inputs.mode }}"
           if [ -z "$MODE" ] && [ -f collector/trigger ]; then
-            MODE=$(grep -oE 'snapshot|wayback' collector/trigger | tail -1)
+            MODE=$(grep -oE 'snapshot|wayback|both' collector/trigger | tail -1)
           fi
           python3 collector/collect.py "${MODE:-snapshot}"
 

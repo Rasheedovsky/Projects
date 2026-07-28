@@ -23,7 +23,7 @@ os.makedirs(RAW, exist_ok=True)
 
 NOW = datetime.now(timezone.utc)
 STAMP = NOW.strftime("%Y%m%dT%H%M%SZ")
-UA = {"User-Agent": "riyadh-traffic-research-collector/1.0 (github.com/rasheedovsky/projects; academic use; contact: repo issues)"}
+UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36", "Accept": "text/html,application/json;q=0.9,*/*;q=0.8", "Accept-Language": "en-US,en;q=0.9"}
 
 CITY_LAT, CITY_LON = 24.7136, 46.6753
 LIVE_URL = "https://api.midway.tomtom.com/ranking/live/SAU%2Friyadh"
@@ -206,6 +206,26 @@ def collect_flow_segments():
     print(f"flow segments: {len(rows)} rows")
 
 
+def collect_js_bundles():
+    """Mirror the traffic-index page's JS bundles so the new live-API endpoint can be found."""
+    try:
+        html = fetch(PAGE_MIRRORS["tomtom_riyadh_page"], timeout=60)
+    except Exception as e:
+        print(f"bundles: page fetch failed {type(e).__name__}"); return
+    paths = set(re.findall(r'(?:src|href)="(/_astro/[^"]+\.js)"', html))
+    paths |= set(re.findall(r'"(/_astro/[^"]+\.js)"', html))
+    got = 0
+    for p in sorted(paths)[:12]:
+        try:
+            js = fetch("https://www.tomtom.com" + p, timeout=45)
+            save_raw("bundle_" + p.split("/")[-1][:80], js)
+            got += 1
+        except Exception as e:
+            print(f"bundle {p[-40:]}: {type(e).__name__}")
+        time.sleep(1)
+    print(f"js bundles mirrored: {got}/{len(paths)}")
+
+
 def wayback_harvest(max_fetches=400, delay=1.5):
     """Pull historical snapshots of the keyless ranking API (+ Riyadh index pages)."""
     wb = os.path.join(DATA, "wayback")
@@ -282,8 +302,10 @@ def wayback_harvest(max_fetches=400, delay=1.5):
 
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else "snapshot"
-    steps = ([collect_live, collect_daily, collect_candidates, collect_pages, collect_flow_segments]
-             if mode == "snapshot" else [wayback_harvest])
+    snapshot_steps = [collect_live, collect_daily, collect_candidates, collect_pages,
+                      collect_js_bundles, collect_flow_segments]
+    steps = {"snapshot": snapshot_steps, "wayback": [wayback_harvest],
+             "both": snapshot_steps + [wayback_harvest]}.get(mode, snapshot_steps)
     failures = 0
     for step in steps:
         try:
