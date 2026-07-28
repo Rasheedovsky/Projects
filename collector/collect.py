@@ -26,15 +26,11 @@ STAMP = NOW.strftime("%Y%m%dT%H%M%SZ")
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36", "Accept": "text/html,application/json;q=0.9,*/*;q=0.8", "Accept-Language": "en-US,en;q=0.9"}
 
 CITY_LAT, CITY_LON = 24.7136, 46.6753
-LIVE_URL = "https://api.midway.tomtom.com/ranking/live/SAU%2Friyadh"
-DAILY_URL = "https://api.midway.tomtom.com/ranking/dailyStats/SAU_riyadh"
-CANDIDATE_URLS = {
-    "liveWeekly": "https://api.midway.tomtom.com/ranking/liveWeekly/SAU%2Friyadh",
-    "weeklyStats": "https://api.midway.tomtom.com/ranking/weeklyStats/SAU_riyadh",
-    "hourlyStats": "https://api.midway.tomtom.com/ranking/hourlyStats/SAU_riyadh",
-    "liveHourly": "https://api.midway.tomtom.com/ranking/liveHourly/SAU%2Friyadh",
-    "stats": "https://api.midway.tomtom.com/ranking/stats/SAU_riyadh",
-}
+# Discovered in bundle_LiveTrafficSection: `/traffic-index/api/live-traffic.json?city=${t}`
+LIVE_URLS = [
+    "https://www.tomtom.com/traffic-index/api/live-traffic.json?city=riyadh",
+    "https://www.tomtom.com/traffic-index/api/live-traffic.json?city=SAU_riyadh_new",
+]
 PAGE_MIRRORS = {
     "tomtom_riyadh_page": "https://www.tomtom.com/traffic-index/city/riyadh",
     "inrix_riyadh_scorecard": "https://inrix.com/scorecard-city/?city=Riyadh&index=31",
@@ -109,57 +105,21 @@ def gv(d, *names):
 
 
 def collect_live():
-    txt = fetch(LIVE_URL)
-    save_raw(f"live_{STAMP}.json", txt)
-    rows = []
-    for rec in find_records(json.loads(txt)):
-        live = gv(rec, "TrafficIndexLive")
-        hist = gv(rec, "TrafficIndexHistoric")
-        upd = gv(rec, "UpdateTime", "UpdateTimeUTC")
-        if live == "" and hist == "":
-            continue
-        upd_iso = ""
+    got = False
+    for url in LIVE_URLS:
+        tag = url.split("city=")[1][:24]
         try:
-            upd_iso = datetime.fromtimestamp(int(upd) / 1000, tz=timezone.utc).isoformat()
-        except (ValueError, TypeError, OSError):
-            pass
-        rows.append([NOW.isoformat(), upd_iso, live, hist, f"live_{STAMP}.json"])
-    append_rows("live_snapshots.csv",
-                ["fetched_utc", "update_time_utc", "traffic_index_live", "traffic_index_historic", "raw_file"],
-                rows)
-    print(f"live: {len(rows)} record(s)")
-
-
-def collect_daily():
-    txt = fetch(DAILY_URL)
-    save_raw(f"dailystats_{STAMP}.json", txt)
-    rows = []
-    for rec in find_records(json.loads(txt)):
-        d = gv(rec, "date", "day", "DateTime")
-        c = gv(rec, "congestion")
-        if d != "" and c != "":
-            rows.append([str(d), str(c)])
-    if rows:
-        path = os.path.join(DATA, "dailystats_riyadh.csv")
-        with open(path, "w", newline="") as f:
-            w = csv.writer(f)
-            w.writerow(["date", "congestion"])
-            w.writerows(sorted(set(map(tuple, rows))))
-    print(f"dailyStats: {len(rows)} rows (full refresh)")
-
-
-def collect_candidates():
-    hits = []
-    for name, url in CANDIDATE_URLS.items():
-        try:
-            txt = fetch(url, timeout=25)
-            if txt.strip():
-                save_raw(f"probe_{name}_{STAMP}.json", txt)
-                hits.append(name)
+            txt = fetch(url, timeout=45)
+            if not txt.strip():
+                print(f"live {tag}: empty"); continue
+            save_raw(f"live_{tag}_{STAMP}.json", txt)
+            print(f"live {tag}: {len(txt)} bytes")
+            got = True
         except Exception as e:
-            print(f"probe {name}: {type(e).__name__}")
+            print(f"live {tag}: {type(e).__name__}: {e}")
         time.sleep(1)
-    print(f"candidate endpoints alive: {hits}")
+    if not got:
+        print("live: no endpoint variant succeeded")
 
 
 def collect_pages():
@@ -233,17 +193,21 @@ def wayback_harvest(max_fetches=400, delay=1.5):
     targets = [
         ("api.midway.tomtom.com/ranking/live/SAU*", "json"),
         ("api.midway.tomtom.com/ranking/dailyStats/SAU*", "json"),
-        ("tomtom.com/en_gb/traffic-index/riyadh-traffic*", "html"),
-        ("tomtom.com/traffic-index/riyadh-traffic*", "html"),
+        ("api.midway.tomtom.com/ranking/*", "json"),
+        ("www.tomtom.com/en_gb/traffic-index/riyadh-traffic*", "html"),
+        ("www.tomtom.com/traffic-index/city/riyadh*", "html"),
+        ("www.tomtom.com/traffic-index/riyadh-traffic*", "html"),
+        ("www.tomtom.com/traffic-index/api/live-traffic.json*", "json"),
     ]
     captures = []
     for pat, kind in targets:
         cdx = (f"https://web.archive.org/cdx/search/cdx?url={urllib.parse.quote(pat)}"
-               f"&matchType=prefix&output=json&filter=statuscode:200&collapse=timestamp:10")
+               f"&output=json&collapse=timestamp:8&limit=3000")
         try:
             txt = fetch(cdx, timeout=90)
             save_raw(f"cdx_{re.sub('[^A-Za-z0-9]+', '_', pat)[:60]}_{STAMP}.json", txt)
             data = json.loads(txt) if txt.strip() else []
+            print(f"cdx {pat}: {max(0, len(data)-1)} captures")
             for row in data[1:]:
                 ts, orig = row[1], row[2]
                 if "riyadh" not in orig.lower() and "SAU" not in orig:
@@ -302,8 +266,7 @@ def wayback_harvest(max_fetches=400, delay=1.5):
 
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else "snapshot"
-    snapshot_steps = [collect_live, collect_daily, collect_candidates, collect_pages,
-                      collect_js_bundles, collect_flow_segments]
+    snapshot_steps = [collect_live, collect_pages, collect_js_bundles, collect_flow_segments]
     steps = {"snapshot": snapshot_steps, "wayback": [wayback_harvest],
              "both": snapshot_steps + [wayback_harvest]}.get(mode, snapshot_steps)
     failures = 0
